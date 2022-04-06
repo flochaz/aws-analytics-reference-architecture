@@ -1,2 +1,3 @@
-export { ProducerWorkflow } from './producer-workflow';
-export { CentralWorkflow } from './central-workflow';
+export { DataDomainWorkflow } from './data-domain-workflow';
+export { CentralGovernance } from './central-governance';
+export { DataDomainRegistration } from './data-domain-registration';

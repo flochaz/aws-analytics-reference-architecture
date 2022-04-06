@@ -1,69 +1,45 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Construct, Aws } from '@aws-cdk/core';
+import { Construct, Aws, RemovalPolicy } from '@aws-cdk/core';
 import { IRole } from '@aws-cdk/aws-iam';
 import { CallAwsService, EventBridgePutEvents } from "@aws-cdk/aws-stepfunctions-tasks";
-import { StateMachine, JsonPath, TaskInput } from "@aws-cdk/aws-stepfunctions";
-import { Rule, EventBus } from '@aws-cdk/aws-events';
-import * as targets from '@aws-cdk/aws-events-targets';
+import { StateMachine, JsonPath, TaskInput, Map } from "@aws-cdk/aws-stepfunctions";
+import { EventBus } from '@aws-cdk/aws-events';
 
 
 /**
- * Properties for the CentralWorkflow Construct
+ * Properties for the CentralGovernanceProps Construct
  */
-
-export interface CentralWorkflowProps {
+export interface CentralGovernanceProps {
     /**
     * LakeFormation admin role
     */
     readonly lfAdminRole: IRole;
-
-    /**
-    * Producer Event Bus Arn
-    */
-    readonly producerEventBusArn: string;
 }
 
 /**
- * CentralWorkflow Construct to create a workflow for Central account.
+ * CentralGovernance Construct to create a workflow and resources for the Central account.
  */
-export class CentralWorkflow extends Construct {
+export class CentralGovernance extends Construct {
     /**
-     * Construct a new instance of CentralWorkflow.
+     * Construct a new instance of CentralGovernance.
      * @param {Construct} scope the Scope of the CDK Construct
      * @param {string} id the ID of the CDK Construct
-     * @param {CentralWorkflowProps} props the CentralWorkflowProps properties
+     * @param {CentralGovernanceProps} props the CentralGovernanceProps properties
      * @access public
      */
 
-    constructor(scope: Construct, id: string, props: CentralWorkflowProps) {
+    constructor(scope: Construct, id: string, props: CentralGovernanceProps) {
         super(scope, id);
 
         // Event Bridge event bus for central account
         const eventBus = new EventBus(this, 'centralEventBus', {
             eventBusName: `${Aws.ACCOUNT_ID}_centralEventBus`,
         });
+        eventBus.applyRemovalPolicy(RemovalPolicy.DESTROY);
 
-        // Event Bridge Rule to trigger the this worklfow upon event from the central account
-        const rule = new Rule(this, 'producerDataDomainRule', {
-            eventPattern: {
-                source: ['com.central.stepfunction'],
-                detailType: ["producerCreateResourceLink"],
-            },
-            eventBus,
-        });
-
-        rule.addTarget(new targets.EventBus(
-            EventBus.fromEventBusArn(
-                this,
-                'producerBus',
-                props.producerEventBusArn,
-            )),
-        );
-        rule.node.addDependency(eventBus)
-
-        // This task registers S3 new s3 location in Lake Formation
+        // This task registers new s3 location in Lake Formation
         const registerS3Location = new CallAwsService(this, "registerS3Location", {
             service: "lakeformation",
             action: "registerResource",
@@ -96,7 +72,7 @@ export class CentralWorkflow extends Construct {
             resultPath: JsonPath.DISCARD
         });
 
-        // Grant Data Location access to Producer account
+        // Grant Data Location access to Data Domain account
         const grantProducerAccess = new CallAwsService(this, "grantProducerAccess", {
             service: "lakeformation",
             action: "grantPermissions",
@@ -117,7 +93,7 @@ export class CentralWorkflow extends Construct {
             resultPath: JsonPath.DISCARD
         });
 
-        // Task to create resource-link for a shared table from central accunt
+        // Task to create a database
         const createDatabase = new CallAwsService(this, 'createDatabase', {
             service: 'glue',
             action: 'createDatabase',
@@ -131,7 +107,7 @@ export class CentralWorkflow extends Construct {
             resultPath: JsonPath.DISCARD,
         });
 
-        // Task to create resource-link for a shared table from central accunt
+        // Task to create a table
         const createTable = new CallAwsService(this, 'createTable', {
             service: 'glue',
             action: 'createTable',
@@ -145,7 +121,7 @@ export class CentralWorkflow extends Construct {
             resultPath: JsonPath.DISCARD,
         });
 
-        // Grant SUPER permissions on product database and tables to Producer account
+        // Grant SUPER permissions on product database and tables to Data Domain account
         const grantTablePermissions = new CallAwsService(this, "grantTablePermissionsToProducer", {
             service: "lakeformation",
             action: "grantPermissions",
@@ -170,30 +146,37 @@ export class CentralWorkflow extends Construct {
             resultPath: JsonPath.DISCARD
         });
 
-        const triggerProducer = new EventBridgePutEvents(this, "TriggerProducer", {
+        // Trigger workflow in Data Domain account via Event Bridge
+        const triggerProducer = new EventBridgePutEvents(this, "triggerCreateResourceLinks", {
             entries: [{
                 detail: TaskInput.fromObject({
                     'database_name': JsonPath.stringAt('$.database_name'),
-                    'central_database_name': JsonPath.stringAt('$.database_name'),
-                    'central_account_id': JsonPath.stringAt('$.central_account_id'),
-                    'table_name': JsonPath.stringAt('$.table_name'),
+                    'table_names': JsonPath.stringAt('$.table_names'),
                 }),
-                detailType: "producerCreateResourceLink",
+                detailType: JsonPath.format('{}_createResourceLinks', JsonPath.stringAt('$.producer_acc_id')),
                 eventBus: eventBus,
                 source: 'com.central.stepfunction'
             }]
         });
 
-        grantTablePermissions.next(triggerProducer);
+        const tablesMapTask = new Map(this, 'forEachTable', {
+            itemsPath: '$.table_names',
+            parameters: {
+                'producer_acc_id.$': '$.producer_acc_id',
+                'database_name.$': '$.database_name',
+                'table_name.$': '$$.Map.Item.Value',
+            },
+            resultPath: JsonPath.DISCARD,
+        });
 
-        // State Machine workflow register data product in Central data mesh account
-        createTable.addCatch(grantTablePermissions, {
-            errors: ["Glue.AlreadyExistsException"], resultPath: "$.Exception"
-        }).next(grantTablePermissions)
+        tablesMapTask.iterator(createTable.next(grantTablePermissions))
 
-        createDatabase.addCatch(createTable, {
+        // State machine dependencies
+        tablesMapTask.next(triggerProducer)
+
+        createDatabase.addCatch(tablesMapTask, {
             errors: ["Glue.AlreadyExistsException"], resultPath: "$.Exception"
-        }).next(createTable)
+        }).next(tablesMapTask)
 
         grantProducerAccess.next(createDatabase)
 
@@ -206,6 +189,7 @@ export class CentralWorkflow extends Construct {
             resultPath: "$.Exception"
         }).next(grantLfAdminAccess);
 
+        // State machine to register data product from Data Domain
         new StateMachine(this, 'RegisterDataProduct', {
             definition: registerS3Location,
             role: props.lfAdminRole,
