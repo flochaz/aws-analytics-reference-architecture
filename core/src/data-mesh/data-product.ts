@@ -24,7 +24,9 @@ export class DataProduct extends Construct {
 
         // 2. create a Database (existing ARA construct) OR with a custom name
 
-        // 3. send an event to EventBridge Bus in central account to trigger RegisterDataProduct workflow via CustomResource
+        // 3. Crawler
+
+        // 4. send an event to EventBridge Bus in central account to trigger RegisterDataProduct workflow via CustomResource
         // --> send database name and a list of tables to be created
 
     }
