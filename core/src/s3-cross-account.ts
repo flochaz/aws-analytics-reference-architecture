@@ -3,7 +3,7 @@
 
 import { PolicyStatement, AccountPrincipal } from '@aws-cdk/aws-iam';
 import { Key } from '@aws-cdk/aws-kms';
-import { Bucket } from '@aws-cdk/aws-s3';
+import { IBucket } from '@aws-cdk/aws-s3';
 import { Construct } from '@aws-cdk/core';
 
 /**
@@ -14,7 +14,7 @@ export interface S3CrossAccountProps {
   /**
    * The S3 Bucket object to grant cross account access
    */
-  readonly bucket: Bucket;
+  readonly bucket: IBucket;
 
   /**
    * The S3 object key to grant cross account access (S3 prefix without the bucket name)

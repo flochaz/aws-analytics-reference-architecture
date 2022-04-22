@@ -169,6 +169,24 @@ export class CentralGovernance extends Construct {
             resultPath: JsonPath.DISCARD,
         });
 
+        const updateDatabaseOwnerMetadata = new CallAwsService(this, "DPMUpdateDatabaseOwnerMetadata", {
+            service: "glue",
+            action: "updateDatabase",
+            iamResources: ["*"],
+            parameters: {
+                "Name.$": "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
+                "DatabaseInput": {
+                    "Name.$": "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
+                    "Parameters": {
+                        "data_owner.$": "$.producer_acc_id",
+                        "data_owner_name.$": "$.product_owner_name",
+                        "pii_flag.$": "$.product_pii_flag"
+                    }
+                }
+            },
+            resultPath: JsonPath.DISCARD
+        })
+
         tablesMapTask.iterator(createTable.next(grantTablePermissions))
 
         // State machine dependencies
@@ -176,7 +194,7 @@ export class CentralGovernance extends Construct {
 
         createDatabase.addCatch(tablesMapTask, {
             errors: ["Glue.AlreadyExistsException"], resultPath: "$.Exception"
-        }).next(tablesMapTask)
+        }).next(updateDatabaseOwnerMetadata).next(tablesMapTask)
 
         grantProducerAccess.next(createDatabase)
 

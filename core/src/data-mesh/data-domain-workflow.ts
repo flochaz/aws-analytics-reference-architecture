@@ -1,10 +1,10 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Construct, Aws, RemovalPolicy } from '@aws-cdk/core';
+import { Construct, Aws, RemovalPolicy, Duration } from '@aws-cdk/core';
 import { IRole } from '@aws-cdk/aws-iam';
 import { CallAwsService } from '@aws-cdk/aws-stepfunctions-tasks';
-import { StateMachine, JsonPath, Map, Choice, Condition, Pass, Result } from '@aws-cdk/aws-stepfunctions';
+import { StateMachine, JsonPath, Map, Choice, Condition, Pass, Result, Wait, WaitTime } from '@aws-cdk/aws-stepfunctions';
 import { CfnEventBusPolicy, Rule, EventBus } from '@aws-cdk/aws-events';
 import * as targets from '@aws-cdk/aws-events-targets';
 
@@ -62,6 +62,18 @@ export class DataDomainWorkflow extends Construct {
             resultSelector: {
                 'Status.$': '$.ResourceShareInvitation.Status',
             },
+        });
+
+        const createLocalDatabase = new CallAwsService(this, 'createDatabase', {
+            service: 'glue',
+            action: 'createDatabase',
+            iamResources: ['*'],
+            parameters: {
+                'DatabaseInput': {
+                    'Name.$': "$.database_name"
+                },
+            },
+            resultPath: JsonPath.DISCARD,
         });
 
         // Task to create resource-link for a shared table from central accunt
@@ -126,10 +138,19 @@ export class DataDomainWorkflow extends Construct {
                 rlMapTask
             ).otherwise(finishWorkflow))
 
+
+        const initWait = new Wait(this, "InitWait", {
+            time: WaitTime.duration(Duration.seconds(5))
+        })
+
+        createLocalDatabase.addCatch(ramMapTask, {
+            errors: ["Glue.AlreadyExistsException"], resultPath: "$.Exception"
+        }).next(ramMapTask);
+
         // State Machine workflow to accept RAM share and create resource-link for a shared table
         const crossAccStateMachine = new StateMachine(this, 'CrossAccStateMachine', {
-            definition: getRamInvitations.next(new Choice(this, "resourceShareInvitationsEmpty")
-                .when(Condition.isPresent('$.taskresult.ResourceShareInvitations[0]'), ramMapTask)
+            definition: initWait.next(getRamInvitations).next(new Choice(this, "resourceShareInvitationsEmpty")
+                .when(Condition.isPresent('$.taskresult.ResourceShareInvitations[0]'), createLocalDatabase)
                 .otherwise(finishWorkflow)
             ),
             role: props.lfAdminRole,
