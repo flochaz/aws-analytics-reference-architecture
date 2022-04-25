@@ -67,7 +67,7 @@ export class DataDomainWorkflow extends Construct {
             },
         });
 
-        const createLocalDatabase = new CallAwsService(this, 'createDatabase', {
+        const createLocalDatabase = new CallAwsService(this, 'createLocalDatabase', {
             service: 'glue',
             action: 'createDatabase',
             iamResources: ['*'],
@@ -140,7 +140,6 @@ export class DataDomainWorkflow extends Construct {
                 Condition.stringEquals('$[0].Response.Status', 'ACCEPTED')),
                 rlMapTask
             ).otherwise(finishWorkflow))
-
 
         const initWait = new Wait(this, "InitWait", {
             time: WaitTime.duration(Duration.seconds(5))

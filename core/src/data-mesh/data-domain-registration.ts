@@ -63,7 +63,5 @@ export class DataDomainRegistration extends Construct {
             )),
         );
         rule.applyRemovalPolicy(RemovalPolicy.DESTROY);
-
-        // TODO Add Rule to catch event from DataProduct construct and trigger CentralGovernance's RegisterDataProduct workflow
     }
 }

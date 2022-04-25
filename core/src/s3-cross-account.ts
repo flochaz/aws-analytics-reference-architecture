@@ -3,7 +3,7 @@
 
 import { PolicyStatement, AccountPrincipal } from '@aws-cdk/aws-iam';
 import { Key } from '@aws-cdk/aws-kms';
-import { IBucket } from '@aws-cdk/aws-s3';
+import { Bucket } from '@aws-cdk/aws-s3';
 import { Construct } from '@aws-cdk/core';
 
 /**
@@ -14,7 +14,7 @@ export interface S3CrossAccountProps {
   /**
    * The S3 Bucket object to grant cross account access
    */
-  readonly bucket: IBucket;
+  readonly bucket: Bucket;
 
   /**
    * The S3 object key to grant cross account access (S3 prefix without the bucket name)
@@ -60,7 +60,7 @@ export class S3CrossAccount extends Construct {
 
   constructor(scope: Construct, id: string, props: S3CrossAccountProps) {
     super(scope, id);
-    
+
     // Get the target account as a Principal
     const targetAccount = new AccountPrincipal(props.accountID);
 
@@ -92,7 +92,7 @@ export class S3CrossAccount extends Construct {
         props.key.grantDecrypt(targetAccount);
       }
     } else {
-      throw new Error('The bucket is encrypted so S3CrossAccount should take a KMS key as parameter'); 
+      throw new Error('The bucket is encrypted so S3CrossAccount should take a KMS key as parameter');
     }
   };
 }

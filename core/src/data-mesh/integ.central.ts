@@ -6,7 +6,7 @@ import { CompositePrincipal, Effect, ManagedPolicy, PolicyDocument, PolicyStatem
 import { CfnDataLakeSettings } from '@aws-cdk/aws-lakeformation';
 import { App, Stack } from '@aws-cdk/core';
 
-import { CentralGovernance } from './data-mesh';
+import { CentralGovernance } from '.';
 
 
 const mockApp = new App();
@@ -53,5 +53,5 @@ new CfnDataLakeSettings(stack, "LFDataLakeSettings", {
 })
 
 new CentralGovernance(stack, "CentralGovernance", {
-    lfAdminRole: lfAdminRole,
+    lfAdminRole,
 });

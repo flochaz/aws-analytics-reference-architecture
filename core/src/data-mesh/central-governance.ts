@@ -115,7 +115,7 @@ export class CentralGovernance extends Construct {
             parameters: {
                 'DatabaseName.$': "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
                 'TableInput': {
-                    'Name.$': '$.table_name',
+                    'Name.$': '$.tables.name',
                 },
             },
             resultPath: JsonPath.DISCARD,
@@ -139,10 +139,11 @@ export class CentralGovernance extends Construct {
                 "Resource": {
                     "Table": {
                         "DatabaseName.$": "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
-                        "Name.$": "$.table_name",
+                        "Name.$": "$.tables.name",
                     },
                 },
             },
+            outputPath: "$.tables.name",
             resultPath: JsonPath.DISCARD
         });
 
@@ -151,7 +152,7 @@ export class CentralGovernance extends Construct {
             entries: [{
                 detail: TaskInput.fromObject({
                     'database_name': JsonPath.stringAt('$.database_name'),
-                    'table_names': JsonPath.stringAt('$.table_names'),
+                    'table_names': JsonPath.stringAt('$.map_result.flatten'),
                 }),
                 detailType: JsonPath.format('{}_createResourceLinks', JsonPath.stringAt('$.producer_acc_id')),
                 eventBus: eventBus,
@@ -160,16 +161,19 @@ export class CentralGovernance extends Construct {
         });
 
         const tablesMapTask = new Map(this, 'forEachTable', {
-            itemsPath: '$.table_names',
+            itemsPath: '$.tables',
             parameters: {
                 'producer_acc_id.$': '$.producer_acc_id',
                 'database_name.$': '$.database_name',
-                'table_name.$': '$$.Map.Item.Value',
+                'tables.$': '$$.Map.Item.Value',
             },
-            resultPath: JsonPath.DISCARD,
+            resultSelector: {
+                "flatten.$": "$[*]"
+            },
+            resultPath: "$.map_result",
         });
 
-        const updateDatabaseOwnerMetadata = new CallAwsService(this, "DPMUpdateDatabaseOwnerMetadata", {
+        const updateDatabaseOwnerMetadata = new CallAwsService(this, "updateDatabaseOwnerMetadata", {
             service: "glue",
             action: "updateDatabase",
             iamResources: ["*"],

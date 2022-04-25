@@ -2,28 +2,57 @@
 // SPDX-License-Identifier: MIT-0
 
 import { Construct } from '@aws-cdk/core';
+import { IRole } from '@aws-cdk/aws-iam';
+import { DataLakeStorage } from '../data-lake-storage';
+import { DataDomainWorkflow } from './data-domain-workflow';
+import { DataDomainCrawler } from './data-domain-crawler';
 
 
 /**
  * Properties for the DataDomain Construct
  */
 export interface DataDomainPros {
+    /**
+    * Central data mesh account Id
+    */
+    readonly centralAccId: string;
 
+    /**
+    * Flag to create a Crawler workflow in data domain account
+    */
+    readonly crawlerWorkflow?: boolean,
+
+    /**
+    * Lake Formation admin role
+    */
+    lfAdminRole: IRole;
 }
 
 /**
  * DataDomain Construct to create all the resource in Data Domain account
  */
 export class DataDomain extends Construct {
-    constructor(scope: Construct, id: string) {
+
+    readonly dataLake: DataLakeStorage;
+    readonly dataDomainWorkflow: DataDomainWorkflow;
+
+    constructor(scope: Construct, id: string, props: DataDomainPros) {
         super(scope, id);
 
-        // TODOs:
+        // Create a data lake with (ARA constructs)
+        this.dataLake = new DataLakeStorage(this, "dataLakeStorage");
 
-        // 1. create a data lake with (ARA constructs)
+        // Create Lake Formation Admin role
+        // TODO: use existing ARA constructs when ready (lf-admin) OR get LF Admin role as parameter
 
-        // 2. create Lake Formation Admin role (existing ARA constructs) OR get LF Admin role as parameter
+        this.dataDomainWorkflow = new DataDomainWorkflow(this, "DataDomainWorkflow", {
+            lfAdminRole: props.lfAdminRole,
+            centralAccId: props.centralAccId,
+        });
 
-        // 3. Initiatie here DataDomainWorkflow from 'data-domain-workflow.ts' and pass LF Admin and centralAccId to it.
+        if (props.crawlerWorkflow) {
+            const dataDomainWorkflowArn = this.dataDomainWorkflow.stateMachine.stateMachineArn;
+            new DataDomainCrawler(this, "DataDomainCrawler", { lfAdminRole: props.lfAdminRole, dataDomainWorkflowArn });
+        }
     }
 }
