@@ -4,11 +4,11 @@
 import { Rule } from '@aws-cdk/aws-events';
 import { SfnStateMachine } from '@aws-cdk/aws-events-targets';
 import { Role } from '@aws-cdk/aws-iam';
-import { Bucket } from '@aws-cdk/aws-s3';
+// import { Bucket } from '@aws-cdk/aws-s3';
 import { Choice, Condition, JsonPath, Map, Pass, StateMachine, Wait, WaitTime } from '@aws-cdk/aws-stepfunctions';
 import { CallAwsService } from '@aws-cdk/aws-stepfunctions-tasks';
 import { Construct, Duration } from '@aws-cdk/core';
-import { S3CrossAccount } from '../s3-cross-account';
+// import { S3CrossAccount } from '../s3-cross-account';
 
 
 /**
@@ -30,10 +30,10 @@ export class DataProduct extends Construct {
         super(scope, id);
 
         // 1. cross-account bucket policy to allow Central account access (existing ARA construct)
-        new S3CrossAccount(this, "CentralCrossAccountAccess", {
-            bucket: Bucket.fromBucketName(this, "productBucket", props.productBucketName),
-            accountID: props.centralAccountId
-        })
+        // new S3CrossAccount(this, "CentralCrossAccountAccess", {
+        //     bucket: Bucket.fromBucketName(this, "productBucket", props.productBucketName),
+        //     accountID: props.centralAccountId
+        // })
 
         // 2. Crawler
         if (props && props.crawlerWorkflow && props.dataDomainWorkflowArn && props.lfAdminRole) {
@@ -64,7 +64,7 @@ export class DataProduct extends Construct {
                         "ALL"
                     ],
                     "Principal": {
-                        "DataLakePrincipalIdentifier": props.lfAdminRole
+                        "DataLakePrincipalIdentifier": props.lfAdminRole.roleArn
                     },
                     "Resource": {
                         "Table": {
@@ -82,7 +82,7 @@ export class DataProduct extends Construct {
                 iamResources: ["*"],
                 parameters: {
                     "Name.$": "States.Format('{}_{}_{}', $$.Execution.Id, $.databaseName, $.tableName)",
-                    "Role": props.lfAdminRole,
+                    "Role": props.lfAdminRole.roleArn,
                     "Targets": {
                     "CatalogTargets": [
                             {
@@ -160,8 +160,8 @@ export class DataProduct extends Construct {
                     source: ["aws.states"],
                     detailType: ["Step Functions Execution Status Change"],
                     detail: {
-                    "status": ["SUCCEEDED"],
-                    "stateMachineArn": [props.dataDomainWorkflowArn]
+                        "status": ["SUCCEEDED"],
+                        "stateMachineArn": [props.dataDomainWorkflowArn]
                     }
                 }
             })

@@ -30,6 +30,9 @@ export interface DataDomainWorkflowProps {
  * It checks and accepts pending RAM shares (tables), and creates resource links in LF Catalog. 
  */
 export class DataDomainWorkflow extends Construct {
+
+    readonly stateMachine: StateMachine;
+
     /**
      * Construct a new instance of DataDomainWorkflow.
      * @param {Construct} scope the Scope of the CDK Construct
@@ -155,6 +158,8 @@ export class DataDomainWorkflow extends Construct {
             ),
             role: props.lfAdminRole,
         });
+
+        this.stateMachine = crossAccStateMachine;
 
         // Event Bridge event bus for data domain account
         const eventBus = new EventBus(this, 'dataDomainEventBus', {
