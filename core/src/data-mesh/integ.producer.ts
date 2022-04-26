@@ -5,19 +5,15 @@
 import { CompositePrincipal, Effect, ManagedPolicy, Policy, PolicyDocument, PolicyStatement, Role, ServicePrincipal } from '@aws-cdk/aws-iam';
 import { CfnDataLakeSettings } from '@aws-cdk/aws-lakeformation';
 import { App, CfnParameter, Stack } from '@aws-cdk/core';
-
-import { CentralGovernance } from '.';
-import { DataDomainRegistration } from '.';
-
-
+import { DataDomain } from './data-domain';
 const mockApp = new App();
-const stack = new Stack(mockApp, 'centralGovernance');
+const stack = new Stack(mockApp, 'producer');
 
 const lfAdminRole = new Role(stack, "LakeFormationLocationRole", {
     assumedBy: new CompositePrincipal(
         new ServicePrincipal("glue.amazonaws.com"),
         new ServicePrincipal("lakeformation.amazonaws.com"),
-        new ServicePrincipal("states.amazonaws.com")
+        new ServicePrincipal("states.amazonaws.com"),
     ),
     managedPolicies: [
         ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSGlueServiceRole"),
@@ -49,14 +45,6 @@ const lfAdminRole = new Role(stack, "LakeFormationLocationRole", {
     }
 });
 
-const dataDomainAccountId = new CfnParameter(stack, "dataDomainAccountId", {
-    type: "String"
-})
-
-const dataDomainRegion = new CfnParameter(stack, "dataDomainRegion", {
-    type: "String"
-})
-
 lfAdminRole.attachInlinePolicy(new Policy(stack, "IAMRelatedPolicies", {
     document: new PolicyDocument({
         statements: [
@@ -69,6 +57,10 @@ lfAdminRole.attachInlinePolicy(new Policy(stack, "IAMRelatedPolicies", {
     })
 }))
 
+const centralAccountId = new CfnParameter(stack, "centralAccountId", {
+    type: "String"
+});
+
 new CfnDataLakeSettings(stack, "LFDataLakeSettings", {
     admins: [
         {
@@ -77,11 +69,9 @@ new CfnDataLakeSettings(stack, "LFDataLakeSettings", {
     ]
 })
 
-new CentralGovernance(stack, "CentralGovernance", {
+new DataDomain(stack, "DataDomainProducer", {
+    centralAccId: centralAccountId.valueAsString,
     lfAdminRole,
-});
-
-new DataDomainRegistration(stack, "RegisterProducer", {
-    dataDomainAccId: dataDomainAccountId.valueAsString,
-    dataDomainRegion: dataDomainRegion.valueAsString
+    crawlerWorkflow: true
 })
+

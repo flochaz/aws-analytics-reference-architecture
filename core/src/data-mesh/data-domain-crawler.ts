@@ -130,7 +130,7 @@ export class DataDomainCrawler extends Construct {
 
         deleteCrawler.endStates;
         checkCrawlerStatusChoice
-            .when(Condition.not(Condition.stringEquals("$.crawlerInfo.Crawler.State", "RUNNING")), deleteCrawler)
+            .when(Condition.stringEquals("$.crawlerInfo.Crawler.State", "READY"), deleteCrawler)
             .otherwise(waitForCrawler);
 
 
@@ -143,8 +143,14 @@ export class DataDomainCrawler extends Construct {
         traverseTableArray.iterator(grantPermissions).endStates;
         parseEventPayload.next(traverseTableArray);
 
+        const initState = new Wait(this, "WaitForMetadata", {
+            time: WaitTime.duration(Duration.seconds(15))
+        })
+
+        initState.next(parseEventPayload);
+
         const updateTableSchemasStateMachine = new StateMachine(this, "UpdateTableSchemas", {
-            definition: parseEventPayload,
+            definition: initState,
             role: props.lfAdminRole
         });
 

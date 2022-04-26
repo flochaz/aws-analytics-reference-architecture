@@ -116,6 +116,9 @@ export class CentralGovernance extends Construct {
                 'DatabaseName.$': "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
                 'TableInput': {
                     'Name.$': '$.tables.name',
+                    'StorageDescriptor': {
+                        'Location.$': '$.tables.location'
+                    }
                 },
             },
             resultPath: JsonPath.DISCARD,
@@ -151,6 +154,7 @@ export class CentralGovernance extends Construct {
         const triggerProducer = new EventBridgePutEvents(this, "triggerCreateResourceLinks", {
             entries: [{
                 detail: TaskInput.fromObject({
+                    'central_database_name': JsonPath.format('{}_{}', '$.producer_acc_id', '$.database_name'),
                     'database_name': JsonPath.stringAt('$.database_name'),
                     'table_names': JsonPath.stringAt('$.map_result.flatten'),
                 }),
@@ -191,12 +195,16 @@ export class CentralGovernance extends Construct {
             resultPath: JsonPath.DISCARD
         })
 
-        tablesMapTask.iterator(createTable.next(grantTablePermissions))
+        tablesMapTask.iterator(
+            createTable.addCatch(grantTablePermissions, {
+                errors: ["Glue.AlreadyExistsException"], resultPath: "$.CreateTableException"
+            }).next(grantTablePermissions)
+        )
 
         // State machine dependencies
         tablesMapTask.next(triggerProducer)
 
-        createDatabase.addCatch(tablesMapTask, {
+        createDatabase.addCatch(updateDatabaseOwnerMetadata, {
             errors: ["Glue.AlreadyExistsException"], resultPath: "$.Exception"
         }).next(updateDatabaseOwnerMetadata).next(tablesMapTask)
 

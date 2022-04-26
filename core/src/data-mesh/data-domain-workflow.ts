@@ -73,11 +73,31 @@ export class DataDomainWorkflow extends Construct {
             iamResources: ['*'],
             parameters: {
                 'DatabaseInput': {
-                    'Name.$': "$.database_name"
+                    'Name.$': "$.detail.database_name"
                 },
             },
             resultPath: JsonPath.DISCARD,
         });
+
+        const grantCreateTable = new CallAwsService(this, 'grantCreateTable', {
+            service: 'lakeformation',
+            action: 'grantPermissions',
+            iamResources: ['*'],
+            parameters: {
+                "Permissions": [
+                    "ALL"
+                ],
+                "Principal": {
+                    "DataLakePrincipalIdentifier": props.lfAdminRole.roleArn
+                },
+                "Resource": {
+                    "Database": {
+                        "Name.$": "$.detail.database_name"
+                    },
+                }
+            },
+            resultPath: JsonPath.DISCARD
+        })
 
         // Task to create resource-link for a shared table from central accunt
         const createResourceLink = new CallAwsService(this, 'createResourceLink', {
@@ -120,7 +140,7 @@ export class DataDomainWorkflow extends Construct {
             parameters: {
                 'ram_share.$': '$$.Map.Item.Value',
                 'central_account_id.$': '$.account',
-                'central_database_name.$': "States.Format('{}_{}', $.account, $.detail.database_name)",
+                'central_database_name.$': "$.detail.central_database_name",
                 'database_name.$': '$.detail.database_name',
                 'table_names.$': '$.detail.table_names'
             },
@@ -145,9 +165,9 @@ export class DataDomainWorkflow extends Construct {
             time: WaitTime.duration(Duration.seconds(5))
         })
 
-        createLocalDatabase.addCatch(ramMapTask, {
+        createLocalDatabase.addCatch(grantCreateTable, {
             errors: ["Glue.AlreadyExistsException"], resultPath: "$.Exception"
-        }).next(ramMapTask);
+        }).next(grantCreateTable).next(ramMapTask);
 
         // State Machine workflow to accept RAM share and create resource-link for a shared table
         const crossAccStateMachine = new StateMachine(this, 'CrossAccStateMachine', {
