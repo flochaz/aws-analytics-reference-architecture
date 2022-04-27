@@ -41,7 +41,7 @@ export class DataDomainRegistration extends Construct {
         // Cross-account policy to allow data domain account to send events to central account event bus
         new CfnEventBusPolicy(this, 'Policy', {
             eventBusName: eventBusName,
-            statementId: 'AllowCentralAccountToPutEvents',
+            statementId: `AllowCentralAccountToPutEvents_${props.dataDomainAccId}`,
             action: 'events:PutEvents',
             principal: props.dataDomainAccId,
         });
