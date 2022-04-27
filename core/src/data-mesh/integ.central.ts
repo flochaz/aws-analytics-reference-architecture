@@ -57,13 +57,13 @@ const producerAccountRegion = new CfnParameter(stack, "producerRegion", {
     type: "String"
 })
 
-const consumerAccountId = new CfnParameter(stack, "consumerAccountId", {
-    type: "String"
-})
+// const consumerAccountId = new CfnParameter(stack, "consumerAccountId", {
+//     type: "String"
+// })
 
-const consumerRegion = new CfnParameter(stack, "consumerRegion", {
-    type: "String"
-})
+// const consumerRegion = new CfnParameter(stack, "consumerRegion", {
+//     type: "String"
+// })
 
 lfAdminRole.attachInlinePolicy(new Policy(stack, "IAMRelatedPolicies", {
     document: new PolicyDocument({
@@ -85,16 +85,18 @@ new CfnDataLakeSettings(stack, "LFDataLakeSettings", {
     ]
 })
 
-new CentralGovernance(stack, "CentralGovernance", {
+const central = new CentralGovernance(stack, "CentralGovernance", {
     lfAdminRole,
 });
 
-new DataDomainRegistration(stack, "RegisterProducer", {
+const registerProducer = new DataDomainRegistration(stack, "RegisterProducer", {
     dataDomainAccId: producerAccountId.valueAsString,
     dataDomainRegion: producerAccountRegion.valueAsString
 })
 
-new DataDomainRegistration(stack, "RegisterConsumer", {
-    dataDomainAccId: consumerAccountId.valueAsString,
-    dataDomainRegion: consumerRegion.valueAsString
-})
+registerProducer.node.addDependency(central)
+
+// new DataDomainRegistration(stack, "RegisterConsumer", {
+//     dataDomainAccId: consumerAccountId.valueAsString,
+//     dataDomainRegion: consumerRegion.valueAsString
+// })

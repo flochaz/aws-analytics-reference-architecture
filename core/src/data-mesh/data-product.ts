@@ -13,12 +13,12 @@ export interface DataProductProps {
     /**
     * S3CrossAccountProps for S3CrossAccount construct
     */
-    crossAccountAccessProps: S3CrossAccountProps,
+    readonly crossAccountAccessProps: S3CrossAccountProps,
 
     /**
     * Database name for data product
     */
-    databaseName?: string,
+    readonly databaseName?: string,
 }
 
 /**

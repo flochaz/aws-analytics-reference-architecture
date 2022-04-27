@@ -5,9 +5,13 @@
 import { CompositePrincipal, Effect, ManagedPolicy, Policy, PolicyDocument, PolicyStatement, Role, ServicePrincipal } from '@aws-cdk/aws-iam';
 import { CfnDataLakeSettings } from '@aws-cdk/aws-lakeformation';
 import { App, CfnParameter, Stack } from '@aws-cdk/core';
+import { Key } from '@aws-cdk/aws-kms';
 import { DataDomain } from './data-domain';
+import { DataProduct } from './data-product';
+
+const env = { account: 'xxx', region: 'xxx' };
 const mockApp = new App();
-const stack = new Stack(mockApp, 'producer');
+const stack = new Stack(mockApp, 'producer', { env });
 
 const lfAdminRole = new Role(stack, "LakeFormationLocationRole", {
     assumedBy: new CompositePrincipal(
@@ -69,9 +73,23 @@ new CfnDataLakeSettings(stack, "LFDataLakeSettings", {
     ]
 })
 
-new DataDomain(stack, "DataDomainProducer", {
+const producerDataDomain = new DataDomain(stack, "DataDomainProducer", {
     centralAccId: centralAccountId.valueAsString,
     lfAdminRole,
     crawlerWorkflow: true
 })
 
+const myKeyLookup = Key.fromLookup(stack, 'CleanBucketKmsKey', {
+    aliasName: 'alias/aws/s3',
+});
+
+const dataProduct = new DataProduct(stack, "DPtpcdsCallCenter", {
+    crossAccountAccessProps: {
+        bucket: producerDataDomain.dataLake.cleanBucket,
+        accountID: centralAccountId.valueAsString,
+        objectKey: "tpcds/call_center",
+        keyArn: myKeyLookup.keyArn,
+    }
+});
+
+dataProduct.node.addDependency(producerDataDomain);

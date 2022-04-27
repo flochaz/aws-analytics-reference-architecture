@@ -26,7 +26,7 @@ export interface S3CrossAccountProps {
    * The KMS Key used to encrypt the bucket
    * @default - No resource based policy is created on any KMS key
    */
-  readonly key?: Key;
+  readonly keyArn: string;
 
   /**
    * The account ID to grant on the S3 location
@@ -87,12 +87,15 @@ export class S3CrossAccount extends Construct {
     );
 
     // If the bucket is encrypted with a custom KMS key, attach a policy to the key
-    if (props.bucket.encryptionKey) {
-      if (props.key && props.bucket.encryptionKey.keyArn == props.key.keyArn) {
-        props.key.grantDecrypt(targetAccount);
-      }
-    } else {
-      throw new Error('The bucket is encrypted so S3CrossAccount should take a KMS key as parameter');
-    }
+    const key = Key.fromKeyArn(this, "BucketKmsKey", props.keyArn);
+    key.grantDecrypt(targetAccount);
+
+    // if (props.bucket.encryptionKey) {
+    //   if (props.key && props.bucket.encryptionKey.keyArn == props.key.keyArn) {
+    //     props.key.grantDecrypt(targetAccount);
+    //   }
+    // } else {
+    //   throw new Error('The bucket is encrypted so S3CrossAccount should take a KMS key as parameter');
+    // }
   };
 }

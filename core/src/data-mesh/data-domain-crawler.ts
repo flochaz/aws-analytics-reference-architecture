@@ -16,12 +16,12 @@ export interface DataDomainCrawlerProps {
     /**
     * ARN of DataDomainWorkflow State Machine
     */
-    dataDomainWorkflowArn: string,
+    readonly dataDomainWorkflowArn: string,
 
     /**
     * LF Admin Role
     */
-    lfAdminRole: IRole
+    readonly lfAdminRole: IRole
 }
 
 /**
