@@ -58,7 +58,7 @@ export class DataDomainRegistration extends Construct {
         rule.addTarget(new targets.EventBus(
             EventBus.fromEventBusArn(
                 this,
-                `putEventsTo_${props.dataDomainAccId}`,
+                "DomainEventBus",
                 dataDomainBusArn
             )),
         );
