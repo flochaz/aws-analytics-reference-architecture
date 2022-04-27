@@ -154,7 +154,7 @@ export class CentralGovernance extends Construct {
         const triggerProducer = new EventBridgePutEvents(this, "triggerCreateResourceLinks", {
             entries: [{
                 detail: TaskInput.fromObject({
-                    'central_database_name': JsonPath.format('{}_{}', '$.producer_acc_id', '$.database_name'),
+                    'central_database_name': JsonPath.format('{}_{}', JsonPath.stringAt('$.producer_acc_id'), JsonPath.stringAt('$.database_name')),
                     'database_name': JsonPath.stringAt('$.database_name'),
                     'table_names': JsonPath.stringAt('$.map_result.flatten'),
                 }),
