@@ -116,6 +116,7 @@ export class CentralGovernance extends Construct {
                 'DatabaseName.$': "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
                 'TableInput': {
                     'Name.$': '$.tables.name',
+                    'Owner.$': '$.producer_acc_id',
                     'StorageDescriptor': {
                         'Location.$': '$.tables.location'
                     }
