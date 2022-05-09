@@ -3,7 +3,7 @@
 
 import { join } from 'path';
 import { IVpc, SubnetType, Vpc, VpcAttributes } from '@aws-cdk/aws-ec2';
-import { CapacityType, Cluster, KubernetesVersion, Nodegroup } from '@aws-cdk/aws-eks';
+import { CapacityType, Cluster, KubernetesManifest, KubernetesVersion, Nodegroup } from '@aws-cdk/aws-eks';
 import { CfnVirtualCluster } from '@aws-cdk/aws-emrcontainers';
 import {
   CfnInstanceProfile,
@@ -33,7 +33,7 @@ import * as CriticalDefaultConfig from './resources/k8s/emr-eks-config/critical.
 import * as NotebookDefaultConfig from './resources/k8s/emr-eks-config/notebook.json';
 import * as SharedDefaultConfig from './resources/k8s/emr-eks-config/shared.json';
 import * as IamPolicyAlb from './resources/k8s/iam-policy-alb.json';
-//import * as IamPolicyAutoscaler from './resources/k8s/iam-policy-autoscaler.json';
+import * as IamPolicyAutoscaler from './resources/k8s/iam-policy-autoscaler.json';
 import * as K8sRoleBinding from './resources/k8s/rbac/emr-containers-role-binding.json';
 import * as K8sRole from './resources/k8s/rbac/emr-containers-role.json';
 
@@ -99,7 +99,7 @@ export class EmrEksCluster extends Construct {
   private static readonly DEFAULT_EMR_VERSION = 'emr-6.4.0-latest';
   private static readonly DEFAULT_EKS_VERSION = KubernetesVersion.V1_21;
   private static readonly DEFAULT_CLUSTER_NAME = 'data-platform';
-  //private static readonly AUTOSCALING_POLICY = PolicyStatement.fromJson(IamPolicyAutoscaler);
+  private static readonly AUTOSCALING_POLICY = PolicyStatement.fromJson(IamPolicyAutoscaler);
   public readonly eksCluster: Cluster;
   public readonly notebookDefaultConfig: string;
   public readonly criticalDefaultConfig: string;
@@ -155,7 +155,7 @@ export class EmrEksCluster extends Construct {
     // Add the provided Amazon IAM Role as Amazon EKS Admin
     this.eksCluster.awsAuth.addMastersRole(Role.fromRoleArn( this, 'AdminRole', props.eksAdminRoleArn ), 'AdminRole');
 
-    /*   // Create a Kubernetes Service Account for the Cluster Autoscaler with Amazon IAM Role
+    // Create a Kubernetes Service Account for the Cluster Autoscaler with Amazon IAM Role
     const AutoscalerServiceAccount = this.eksCluster.addServiceAccount('Autoscaler', {
       name: 'cluster-autoscaler',
       namespace: 'kube-system',
@@ -163,13 +163,13 @@ export class EmrEksCluster extends Construct {
     // Add the proper Amazon IAM Policy to the Amazon IAM Role for the Cluster Autoscaler
     AutoscalerServiceAccount.addToPrincipalPolicy(
       EmrEksCluster.AUTOSCALING_POLICY,
-    );*/
+    );
 
     // @todo: check if we can create the service account from the Helm Chart
     // @todo: check if there's a workaround to run it with wait:true - at the moment the custom resource times out if you do that.
     // Deploy the Helm Chart for Kubernetes Cluster Autoscaler
 
-    /*   this.eksCluster.addHelmChart('AutoScaler', {
+    this.eksCluster.addHelmChart('AutoScaler', {
       chart: 'cluster-autoscaler',
       repository: 'https://kubernetes.github.io/autoscaler',
       version: '9.11.0',
@@ -193,7 +193,7 @@ export class EmrEksCluster extends Construct {
           'skip-nodes-with-system-pods': false,
         },
       },
-    });*/
+    });
 
     const karpenterNodeRole = new Role(this.eksCluster, 'karpenter-node-role', {
       assumedBy: new ServicePrincipal(`ec2.${this.eksCluster.stack.urlSuffix}`),
@@ -337,7 +337,7 @@ export class EmrEksCluster extends Construct {
 
     // Create the Amazon EKS Nodegroup for tooling
     this.addNodegroupCapacity('tooling', EmrEksNodegroup.TOOLING_ALL);
-    /*// Create default Amazon EMR on EKS Nodegroups. This will create one Amazon EKS nodegroup per AZ
+    // Create default Amazon EMR on EKS Nodegroups. This will create one Amazon EKS nodegroup per AZ
     // Also create default configurations and pod templates for these nodegroups
     this.addEmrEksNodegroup('criticalAll', EmrEksNodegroup.CRITICAL_ALL);
     this.addEmrEksNodegroup('sharedDriver', EmrEksNodegroup.SHARED_DRIVER);
@@ -345,7 +345,6 @@ export class EmrEksCluster extends Construct {
     // Add a nodegroup for notebooks
     this.addEmrEksNodegroup('notebookDriver', EmrEksNodegroup.NOTEBOOK_DRIVER);
     this.addEmrEksNodegroup('notebookExecutor', EmrEksNodegroup.NOTEBOOK_EXECUTOR);
-    this.addEmrEksNodegroup('notebook', EmrEksNodegroup.NOTEBOOK_WITHOUT_PODTEMPLATE);*/
     // Create an Amazon S3 Bucket for default podTemplate assets
     this.assetBucket = SingletonBucket.getOrCreate(this, `${this.clusterName.toLowerCase()}-emr-eks-assets`);
     // Configure the podTemplate location
@@ -678,6 +677,19 @@ ${userData.join('\r\n')}
     cr.node.addDependency(this.eksCluster);
 
     return cr;
+  }
+
+
+  /**
+   * Add a new provisioner for the EKS cluster
+   * This method is be used to add a karpenter provisioner to the Amazon EKS cluster and automatically set tags based on labels and taints
+   *  so it can be used for the nodes.
+   * @param {string} id the object id, must be unique accross the stack
+   * @param {KubernetesManifest} provisionerManifest the Kubernetes manifest describing the Karpenter provisioner
+   * @access public
+   */
+  public addKarpenterProvisioner(id: string, provisionerManifest: KubernetesManifest) {
+    this.eksCluster.addManifest(id, provisionerManifest);
   }
 
   /**
