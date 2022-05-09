@@ -19,7 +19,7 @@ export interface EmrEksNodegroupOptions extends NodegroupOptions {
    */
   readonly mountNvme?: boolean;
   /**
-   * Configure the Amazon EKS NodeGroup in this subnet. Use this setting for resource dependencies like an Amazon RDS database. 
+   * Configure the Amazon EKS NodeGroup in this subnet. Use this setting for resource dependencies like an Amazon RDS database.
    * The subnet must include the availability zone information because the nodegroup is tagged with the AZ for the K8S Cluster Autoscaler.
    * @default - One NodeGroup is deployed per cluster AZ
    */
@@ -36,7 +36,7 @@ export class EmrEksNodegroup {
   public static readonly TOOLING_ALL: EmrEksNodegroupOptions = {
     nodegroupName: 'tooling',
     instanceTypes: [new InstanceType('t3.medium')],
-    minSize: 1,
+    minSize: 2,
     maxSize: 10,
     labels: { role: 'tooling' },
   };
@@ -52,7 +52,7 @@ export class EmrEksNodegroup {
     minSize: 0,
     maxSize: 100,
     labels: {
-      role: 'critical',
+      'role': 'critical',
       'node-lifecycle': 'on-demand',
     },
     taints: [
