@@ -55,7 +55,7 @@ export interface DataLakeStorageProps {
  *  * S3 buckets for Raw/Cleaned/Transformed data,
  *  * data lifecycle optimization/transitioning to different Amazon S3 storage classes
  *  * server side buckets encryption managed by KMS customer key
- *  * Default single KMS key
+ *  * Default single KMS key, you can call the key in the stack with `SingletonKey.getOrCreate(scope, 'DefaultKmsKey')`
  *  * SSL communication enforcement
  *  * access logged to an S3 bucket
  *  * All public access blocked
@@ -64,9 +64,9 @@ export interface DataLakeStorageProps {
  *  * Raw data is moved to Infrequent Access after 30 days and archived to Glacier after 90 days
  *  * Clean and Transformed data is moved to Infrequent Access after 90 days and is not archived
  *
- * Objects and buckets are automatically deleted when the CDK application is detroyed.
+ * Objects and buckets are automatically deleted when the CDK application is destroyed.
  *
- * For custom requirements, consider using {@link AraBucket}.
+ * For custom requirements, consider using {@link AraBucket} to build your own storage class
  *
  * Usage example:
  * ```typescript
