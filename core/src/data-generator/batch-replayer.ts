@@ -28,12 +28,12 @@ export interface BatchReplayerProps {
    */
   readonly frequency?: number;
   /**
-   * The S3 Bucket sink where the BatchReplayer writes data. 
+   * The S3 Bucket sink where the BatchReplayer writes data.
    * :warnning: **If the Bucket is encrypted with KMS, the Key must be managed by this stack.
    */
   readonly sinkBucket: Bucket;
   /**
-   * The S3 object key sink where the BatchReplayer writes data. 
+   * The S3 object key sink where the BatchReplayer writes data.
    * @default - No object key is used and the BatchReplayer writes the dataset in s3://<BUCKET_NAME>/<TABLE_NAME>
    */
   readonly sinkObjectKey?: string;
@@ -56,12 +56,12 @@ export interface BatchReplayerProps {
  * 2. resources/lambdas/write-in-batch
  * Take a file path, filter only records within given time range, adjust the the time with offset to
  * make it looks like just being generated. Then write the output to the `sinkBucket`
- * 
+ *
  * Usage example:
  * ```typescript
- * 
+ *
  * const myBucket = new Bucket(stack, "MyBucket")
- * 
+ *
  * new BatchReplayer(stack, "WebSalesReplayer", {
  *   dataset: PreparedDataset.RETAIL_1_GB_WEB_SALE,
  *   s3BucketSink: myBucket
@@ -70,8 +70,9 @@ export interface BatchReplayerProps {
  *   outputFileMaxSizeInBytes: 10000000,
  * });
  * ```
- * 
+ *
  * :warnning: **If the Bucket is encrypted with KMS, the Key must be managed by this stack.
+ *            ** You can generate a key using the Singleton method {@link SingletonKey }
  */
 export class BatchReplayer extends Construct {
 
@@ -198,9 +199,9 @@ export class BatchReplayer extends Construct {
 
     // grant permissions to write to the bucket and to use the KMS key
     const putPattern = this.sinkObjectKey ? `${this.sinkObjectKey}/*` : undefined;
-    this.sinkBucket.grantWrite(writeInBatchFn,putPattern);
+    this.sinkBucket.grantWrite(writeInBatchFn, putPattern);
 
-    const sinkPath = this.sinkObjectKey ? `${this.sinkObjectKey}/${this.dataset.tableName}` : this.dataset.tableName; 
+    const sinkPath = this.sinkObjectKey ? `${this.sinkObjectKey}/${this.dataset.tableName}` : this.dataset.tableName;
     const writeInBatchFnTask = new LambdaInvoke(this, 'WriteInBatchFnTask', {
       lambdaFunction: writeInBatchFn,
       payload: TaskInput.fromObject({
