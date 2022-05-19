@@ -8,6 +8,7 @@ import { AraBucket } from './ara-bucket';
 
 /**
  * AthenaDemoSetup Construct to automatically setup a new Amazon Athena Workgroup with proper configuration for out-of-the-box demo
+ * The workgroup is named `demo` and the bucket for query results is `athena-logs-<ACCOUNT-ID>-<REGION>`
  */
 
 export class AthenaDemoSetup extends Construct {
