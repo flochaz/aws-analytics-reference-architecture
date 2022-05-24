@@ -22,7 +22,7 @@ const project = new awscdk.AwsCdkConstructLibrary({
     'analytics',
   ],
 
-  cdkVersion: '1.151.0',
+  cdkVersion: '1.155.0',
   defaultReleaseBranch: 'main',
   license: 'MIT-0',
   name: 'aws-analytics-reference-architecture',
@@ -38,6 +38,7 @@ const project = new awscdk.AwsCdkConstructLibrary({
   githubOptions: {
     pullRequestLint: false,
   },
+  //workflowContainerImage: 'jsii/superchain:1-buster-slim',
 
   cdkDependencies: [
     '@aws-cdk/assertions',
@@ -68,7 +69,7 @@ const project = new awscdk.AwsCdkConstructLibrary({
     '@aws-cdk/lambda-layer-awscli',
     '@aws-cdk/aws-emr',
     '@aws-cdk/aws-kms',
-    '@aws-cdk/aws-lakeformation'
+    '@aws-cdk/aws-lakeformation',
   ],
 
   deps: [
@@ -79,8 +80,9 @@ const project = new awscdk.AwsCdkConstructLibrary({
     '@types/js-yaml',
     '@types/jest',
     'esbuild',
-    'aws-cdk@1.151.0',
-    'cdk-assets@1.151.0',
+    'aws-cdk@1.155.0',
+    'cdk-nag@^1.0.0',
+    'cdk-assets@1.155.0',
     'jest-runner-groups',
     'promptly',
     'proxy-agent',
@@ -118,7 +120,12 @@ const project = new awscdk.AwsCdkConstructLibrary({
 });
 
 project.testTask.reset('jest --group=unit');
+
 project.testTask.spawn('eslint');
+
+project.addTask('test:best-practice', {
+  exec: 'jest --group=best-practice',
+});
 
 project.addTask('test:unit', {
   exec: 'jest --group=unit',
@@ -142,7 +149,7 @@ const testDeploy = project.addTask('test:deploy', {
 
 testDeploy.prependExec('npx projen build');
 
-project.packageTask.spawn(project.tasks.tryFind("package-all"));
+project.packageTask.spawn(project.tasks.tryFind('package-all'));
 
 project.addTask('test:destroy', {
   exec: 'cdk destroy --app=./lib/integ.default.js',
@@ -190,12 +197,10 @@ const gradleBuildTask = project.addTask('gradle-build', {
   description: './gradlew shadowJar all folders in lib that has requirements.txt',
 });
 
-for (const dirPath of findAllGradleLambdaDir('src')) {
+for (const gradlePath of findAllGradleLambdaDir('src')) {
   console.log('loop over gradle dir');
-  // Assume that all folders with 'requirements.txt' have been copied to lib
-  // by the task 'copy-resources'
-  const dirPathInLib = dirname(dirPath.replace('src', 'lib'));
-  const gradleCmd = `cd ${dirPathInLib} && ./gradlew shadowJar && cp build/libs/*.jar ./ 2> /dev/null`;
+  const dirPath = dirname(gradlePath);
+  const gradleCmd = `cd ${dirPath} && ./gradlew shadowJar && cp build/libs/*.jar ./ 2> /dev/null`;
 
   gradleBuildTask.exec(gradleCmd);
 }
@@ -203,9 +208,9 @@ for (const dirPath of findAllGradleLambdaDir('src')) {
 /**
  * Run `copy-resources` and `pip-install` as part of compile
  */
+project.compileTask.exec('npx projen gradle-build');
 project.compileTask.exec('npx projen copy-resources');
 project.compileTask.exec('npx projen pip-install');
-project.compileTask.exec('npx projen gradle-build');
 
 /**
  * Find all directory that has a Python package.

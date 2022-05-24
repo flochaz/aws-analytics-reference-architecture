@@ -87,16 +87,16 @@
       "description": "Only compile",
       "steps": [
         {
-          "exec": "jsii --silence-warnings=reserved-word --no-fix-peer-dependencies"
+          "exec": "jsii --silence-warnings=reserved-word"
+        },
+        {
+          "exec": "npx projen gradle-build"
         },
         {
           "exec": "npx projen copy-resources"
         },
         {
           "exec": "npx projen pip-install"
-        },
-        {
-          "exec": "npx projen gradle-build"
         }
       ]
     },
@@ -104,6 +104,9 @@
       "name": "copy-resources",
       "description": "Copy all resources directories from src to lib",
       "steps": [
+        {
+          "exec": "rsync -avr --exclude '*.ts' --exclude '*.js' src/common/resources lib/common"
+        },
         {
           "exec": "rsync -avr --exclude '*.ts' --exclude '*.js' src/data-generator/resources lib/data-generator"
         },
@@ -177,7 +180,7 @@
       "description": "./gradlew shadowJar all folders in lib that has requirements.txt",
       "steps": [
         {
-          "exec": "cd lib/db-schema-manager/resources/flyway-lambda && ./gradlew shadowJar && cp build/libs/*.jar ./ 2> /dev/null"
+          "exec": "cd src/db-schema-manager/resources/flyway-lambda && ./gradlew shadowJar && cp build/libs/*.jar ./ 2> /dev/null"
         }
       ]
     },
@@ -227,6 +230,9 @@
       "name": "pip-install",
       "description": "pip install all folders in lib that has requirements.txt",
       "steps": [
+        {
+          "exec": "pip3 install -r lib/common/resources/lambdas/pre-bundled-layer/requirements.txt --target lib/common/resources/lambdas/pre-bundled-layer --upgrade"
+        },
         {
           "exec": "pip3 install -r lib/data-generator/resources/lambdas/find-file-paths/requirements.txt --target lib/data-generator/resources/lambdas/find-file-paths --upgrade"
         },
@@ -297,6 +303,14 @@
       "steps": [
         {
           "exec": "jest --group=unit"
+        }
+      ]
+    },
+    "test:best-practice": {
+      "name": "test:best-practice",
+      "steps": [
+        {
+          "exec": "jest --group=best-practice"
         }
       ]
     },
@@ -429,7 +443,7 @@
       "description": "Watch & compile in the background",
       "steps": [
         {
-          "exec": "jsii -w --silence-warnings=reserved-word --no-fix-peer-dependencies"
+          "exec": "jsii -w --silence-warnings=reserved-word"
         }
       ]
     }
