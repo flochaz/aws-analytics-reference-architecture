@@ -31,7 +31,7 @@ export interface DataDomainWorkflowProps {
  */
 export class DataDomainWorkflow extends Construct {
 
-    readonly stateMachine: StateMachine;
+    public readonly stateMachine: StateMachine;
 
     /**
      * Construct a new instance of DataDomainWorkflow.

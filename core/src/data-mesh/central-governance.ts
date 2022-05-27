@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MIT-0
 
 import { Construct, Aws, RemovalPolicy } from '@aws-cdk/core';
-import { IRole } from '@aws-cdk/aws-iam';
+import { IRole, Policy, PolicyStatement, PolicyDocument, Effect } from '@aws-cdk/aws-iam';
 import { CallAwsService, EventBridgePutEvents } from "@aws-cdk/aws-stepfunctions-tasks";
 import { StateMachine, JsonPath, TaskInput, Map } from "@aws-cdk/aws-stepfunctions";
 import { EventBus } from '@aws-cdk/aws-events';
+
+import { Utils } from '../utils';
 
 
 /**
@@ -38,6 +40,63 @@ export class CentralGovernance extends Construct {
             eventBusName: `${Aws.ACCOUNT_ID}_centralEventBus`,
         });
         eventBus.applyRemovalPolicy(RemovalPolicy.DESTROY);
+
+        props.lfAdminRole.attachInlinePolicy(new Policy(this, 'sendEvents', {
+            statements: [
+                new PolicyStatement({
+                    actions: ['events:Put*'],
+                    resources: [eventBus.eventBusArn],
+                }),
+            ],
+        }));
+
+        const kmsPolicyDocument = new PolicyDocument({
+            statements: [
+                new PolicyStatement({
+                    actions: ['kms:Decrypt', 'kms:DescribeKey'],
+                    resources: ['arn:aws:kms:*:<interpolated_value>:*'],
+                    effect: Effect.ALLOW,
+                }),
+            ]
+        })
+        const kmsPolicy = Utils.intrinsicReplacer(JSON.stringify(kmsPolicyDocument.toJSON()));
+
+        // This task adds a policy for KMS key of a Producer account
+        const addKmsPolicy = new CallAwsService(this, 'addKmsPolicy', {
+            service: "iam",
+            action: "putRolePolicy",
+            iamResources: ["*"],
+            parameters: {
+                "PolicyDocument.$": `States.Format('${kmsPolicy}', $.data_product_s3)`,
+                "RoleName": props.lfAdminRole.roleName,
+                "PolicyName.$": "States.Format('kms-{}', $.producer_acc_id)",
+            },
+            resultPath: JsonPath.DISCARD
+        });
+
+        const bucketPolicyDocument = new PolicyDocument({
+            statements: [
+                new PolicyStatement({
+                    actions: ['s3:GetObject', 's3:ListBucket'],
+                    resources: ['arn:aws:s3:::<interpolated_value>', 'arn:aws:s3:::<interpolated_value>*'],
+                    effect: Effect.ALLOW,
+                }),
+            ]
+        })
+        const bucketPolicy = Utils.intrinsicReplacer(JSON.stringify(bucketPolicyDocument.toJSON()));
+
+        // This task adds a policy for S3 of a Data Product being registered
+        const addBucketPolicy = new CallAwsService(this, "addBucketPolicy", {
+            service: "iam",
+            action: "putRolePolicy",
+            iamResources: ["*"],
+            parameters: {
+                "PolicyDocument.$": `States.Format('${bucketPolicy}', $.data_product_s3, $.tables.location_key)`,
+                "PolicyName.$": "States.Format('dataProductPolicy-{}', $.tables.name)",
+                "RoleName": props.lfAdminRole.roleName,
+            },
+            resultPath: JsonPath.DISCARD
+        });
 
         // This task registers new s3 location in Lake Formation
         const registerS3Location = new CallAwsService(this, "registerS3Location", {
@@ -168,6 +227,7 @@ export class CentralGovernance extends Construct {
         const tablesMapTask = new Map(this, 'forEachTable', {
             itemsPath: '$.tables',
             parameters: {
+                'data_product_s3.$': '$.data_product_s3',
                 'producer_acc_id.$': '$.producer_acc_id',
                 'database_name.$': '$.database_name',
                 'tables.$': '$$.Map.Item.Value',
@@ -197,9 +257,12 @@ export class CentralGovernance extends Construct {
         })
 
         tablesMapTask.iterator(
-            createTable.addCatch(grantTablePermissions, {
-                errors: ["Glue.AlreadyExistsException"], resultPath: "$.CreateTableException"
-            }).next(grantTablePermissions)
+            addBucketPolicy.next(
+                createTable.addCatch(grantTablePermissions, {
+                    errors: ["Glue.AlreadyExistsException"],
+                    resultPath: "$.CreateTableException"
+                })
+            ).next(grantTablePermissions)
         )
 
         // State machine dependencies
@@ -220,9 +283,11 @@ export class CentralGovernance extends Construct {
             resultPath: "$.Exception"
         }).next(grantLfAdminAccess);
 
+        addKmsPolicy.next(registerS3Location)
+
         // State machine to register data product from Data Domain
         new StateMachine(this, 'RegisterDataProduct', {
-            definition: registerS3Location,
+            definition: addKmsPolicy,
             role: props.lfAdminRole,
         });
     }

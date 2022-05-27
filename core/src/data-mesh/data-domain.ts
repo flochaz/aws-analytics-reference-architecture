@@ -20,7 +20,7 @@ export interface DataDomainPros {
     /**
     * Flag to create a Crawler workflow in data domain account
     */
-    readonly crawlerWorkflow?: boolean,
+    readonly crawlerWorkflow?: boolean;
 
     /**
     * Lake Formation admin role
@@ -33,17 +33,13 @@ export interface DataDomainPros {
  */
 export class DataDomain extends Construct {
 
-    readonly dataLake: DataLakeStorage;
-    readonly dataDomainWorkflow: DataDomainWorkflow;
+    public readonly dataLake: DataLakeStorage;
+    public readonly dataDomainWorkflow: DataDomainWorkflow;
 
     constructor(scope: Construct, id: string, props: DataDomainPros) {
         super(scope, id);
 
-        // Create a data lake with (ARA constructs)
         this.dataLake = new DataLakeStorage(this, "dataLakeStorage");
-
-        // Create Lake Formation Admin role
-        // TODO: use existing ARA constructs when ready (lf-admin) OR get LF Admin role as parameter
 
         this.dataDomainWorkflow = new DataDomainWorkflow(this, "DataDomainWorkflow", {
             lfAdminRole: props.lfAdminRole,
@@ -51,8 +47,10 @@ export class DataDomain extends Construct {
         });
 
         if (props.crawlerWorkflow) {
-            const dataDomainWorkflowArn = this.dataDomainWorkflow.stateMachine.stateMachineArn;
-            new DataDomainCrawler(this, "DataDomainCrawler", { lfAdminRole: props.lfAdminRole, dataDomainWorkflowArn });
+            new DataDomainCrawler(this, "DataDomainCrawler", {
+                lfAdminRole: props.lfAdminRole,
+                dataDomainWorkflowArn: this.dataDomainWorkflow.stateMachine.stateMachineArn,
+            });
         }
     }
 }

@@ -28,7 +28,7 @@ export class DataProduct extends Construct {
     constructor(scope: Construct, id: string, props: DataProductProps) {
         super(scope, id);
 
-        // cross-account bucket policy to allow Central account access (existing ARA construct)
+        // cross-account bucket policy to allow Central account access
         new S3CrossAccount(this, "CentralCrossAccountAccess", props.crossAccountAccessProps)
 
         // TODO: Optional to trigger an EventBridge event via CustomResource in central account if used without the UI
