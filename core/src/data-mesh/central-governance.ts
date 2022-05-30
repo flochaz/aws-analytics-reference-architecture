@@ -11,17 +11,43 @@ import { Utils } from '../utils';
 
 
 /**
- * Properties for the CentralGovernanceProps Construct
+ * Properties for the CentralGovernance Construct
  */
 export interface CentralGovernanceProps {
     /**
-    * LakeFormation admin role
+    * Lake Formation admin role
     */
     readonly lfAdminRole: IRole;
 }
 
 /**
- * CentralGovernance Construct to create a workflow and resources for the Central account.
+ * This CDK Construct creates a Data Product registration workflow and resources for the Central Governance account.
+ * It uses AWS Step Functions state machine to orchestrate the workflow:
+ * * registers an S3 location for a new Data Product (location in Data Domain account)
+ * * creates a database and tables in AWS Glue Data Catalog
+ * * grants permissions to LF Admin role
+ * * shares tables to Data Product owner account (Producer)
+ * 
+ * This construct also creates an Amazon EventBridge Event Bus to enable communication with Data Domain accounts (Producer/Consumer).
+ * 
+ * Usage example:
+ * ```typescript
+ * import * as cdk from '@aws-cdk/core';
+ * import { Role } from '@aws-cdk/aws-iam';
+ * import { CentralGovernance } from 'aws-analytics-reference-architecture';
+ * 
+ * const exampleApp = new cdk.App();
+ * const stack = new cdk.Stack(exampleApp, 'DataProductStack');
+ * 
+ * const lfAdminRole = new Role(stack, 'myLFAdminRole', {
+ *  assumedBy: ...
+ * });
+ * 
+ * new CentralGovernance(stack, 'myCentralGov', {
+ *  lfAdminRole: lfAdminRole
+ * });
+ * ```
+ * 
  */
 export class CentralGovernance extends Construct {
     /**
@@ -35,7 +61,7 @@ export class CentralGovernance extends Construct {
     constructor(scope: Construct, id: string, props: CentralGovernanceProps) {
         super(scope, id);
 
-        // Event Bridge event bus for central account
+        // Event Bridge event bus for the Central Governance account
         const eventBus = new EventBus(this, 'centralEventBus', {
             eventBusName: `${Aws.ACCOUNT_ID}_centralEventBus`,
         });
@@ -58,18 +84,18 @@ export class CentralGovernance extends Construct {
                     effect: Effect.ALLOW,
                 }),
             ]
-        })
+        });
         const kmsPolicy = Utils.intrinsicReplacer(JSON.stringify(kmsPolicyDocument.toJSON()));
 
         // This task adds a policy for KMS key of a Producer account
         const addKmsPolicy = new CallAwsService(this, 'addKmsPolicy', {
-            service: "iam",
-            action: "putRolePolicy",
-            iamResources: ["*"],
+            service: 'iam',
+            action: 'putRolePolicy',
+            iamResources: ['*'],
             parameters: {
-                "PolicyDocument.$": `States.Format('${kmsPolicy}', $.data_product_s3)`,
-                "RoleName": props.lfAdminRole.roleName,
-                "PolicyName.$": "States.Format('kms-{}', $.producer_acc_id)",
+                'PolicyDocument.$': `States.Format('${kmsPolicy}', $.data_product_s3)`,
+                'RoleName': props.lfAdminRole.roleName,
+                'PolicyName.$': "States.Format('kms-{}', $.producer_acc_id)",
             },
             resultPath: JsonPath.DISCARD
         });
@@ -82,49 +108,49 @@ export class CentralGovernance extends Construct {
                     effect: Effect.ALLOW,
                 }),
             ]
-        })
+        });
         const bucketPolicy = Utils.intrinsicReplacer(JSON.stringify(bucketPolicyDocument.toJSON()));
 
         // This task adds a policy for S3 of a Data Product being registered
-        const addBucketPolicy = new CallAwsService(this, "addBucketPolicy", {
-            service: "iam",
-            action: "putRolePolicy",
-            iamResources: ["*"],
+        const addBucketPolicy = new CallAwsService(this, 'addBucketPolicy', {
+            service: 'iam',
+            action: 'putRolePolicy',
+            iamResources: ['*'],
             parameters: {
-                "PolicyDocument.$": `States.Format('${bucketPolicy}', $.data_product_s3, $.tables.location_key)`,
-                "PolicyName.$": "States.Format('dataProductPolicy-{}', $.tables.name)",
-                "RoleName": props.lfAdminRole.roleName,
+                'PolicyDocument.$': `States.Format('${bucketPolicy}', $.data_product_s3, $.tables.location_key)`,
+                'PolicyName.$': "States.Format('dataProductPolicy-{}', $.tables.name)",
+                'RoleName': props.lfAdminRole.roleName,
             },
             resultPath: JsonPath.DISCARD
         });
 
         // This task registers new s3 location in Lake Formation
-        const registerS3Location = new CallAwsService(this, "registerS3Location", {
-            service: "lakeformation",
-            action: "registerResource",
-            iamResources: ["*"],
+        const registerS3Location = new CallAwsService(this, 'registerS3Location', {
+            service: 'lakeformation',
+            action: 'registerResource',
+            iamResources: ['*'],
             parameters: {
-                "ResourceArn.$": "States.Format('arn:aws:s3:::{}', $.data_product_s3)",
-                "RoleArn": props.lfAdminRole.roleArn,
+                'ResourceArn.$': "States.Format('arn:aws:s3:::{}', $.data_product_s3)",
+                'RoleArn': props.lfAdminRole.roleArn,
             },
             resultPath: JsonPath.DISCARD
         });
 
         // Grant Data Location access to Lake Formation Admin role
-        const grantLfAdminAccess = new CallAwsService(this, "grantLfAdminAccess", {
-            service: "lakeformation",
-            action: "grantPermissions",
-            iamResources: ["*"],
+        const grantLfAdminAccess = new CallAwsService(this, 'grantLfAdminAccess', {
+            service: 'lakeformation',
+            action: 'grantPermissions',
+            iamResources: ['*'],
             parameters: {
-                "Permissions": [
-                    "DATA_LOCATION_ACCESS"
+                'Permissions': [
+                    'DATA_LOCATION_ACCESS'
                 ],
-                "Principal": {
-                    "DataLakePrincipalIdentifier": props.lfAdminRole.roleArn
+                'Principal': {
+                    'DataLakePrincipalIdentifier': props.lfAdminRole.roleArn
                 },
-                "Resource": {
-                    "DataLocation": {
-                        "ResourceArn.$": "States.Format('arn:aws:s3:::{}', $.data_product_s3)"
+                'Resource': {
+                    'DataLocation': {
+                        'ResourceArn.$': "States.Format('arn:aws:s3:::{}', $.data_product_s3)"
                     }
                 }
             },
@@ -132,20 +158,20 @@ export class CentralGovernance extends Construct {
         });
 
         // Grant Data Location access to Data Domain account
-        const grantProducerAccess = new CallAwsService(this, "grantProducerAccess", {
-            service: "lakeformation",
-            action: "grantPermissions",
-            iamResources: ["*"],
+        const grantProducerAccess = new CallAwsService(this, 'grantProducerAccess', {
+            service: 'lakeformation',
+            action: 'grantPermissions',
+            iamResources: ['*'],
             parameters: {
-                "Permissions": [
-                    "DATA_LOCATION_ACCESS"
+                'Permissions': [
+                    'DATA_LOCATION_ACCESS'
                 ],
-                "Principal": {
-                    "DataLakePrincipalIdentifier.$": "$.producer_acc_id"
+                'Principal': {
+                    'DataLakePrincipalIdentifier.$': '$.producer_acc_id'
                 },
-                "Resource": {
-                    "DataLocation": {
-                        "ResourceArn.$": "States.Format('arn:aws:s3:::{}', $.data_product_s3)"
+                'Resource': {
+                    'DataLocation': {
+                        'ResourceArn.$': "States.Format('arn:aws:s3:::{}', $.data_product_s3)"
                     }
                 }
             },
@@ -185,40 +211,48 @@ export class CentralGovernance extends Construct {
         });
 
         // Grant SUPER permissions on product database and tables to Data Domain account
-        const grantTablePermissions = new CallAwsService(this, "grantTablePermissionsToProducer", {
-            service: "lakeformation",
-            action: "grantPermissions",
-            iamResources: ["*"],
+        const grantTablePermissions = new CallAwsService(this, 'grantTablePermissionsToProducer', {
+            service: 'lakeformation',
+            action: 'grantPermissions',
+            iamResources: ['*'],
             parameters: {
-                "Permissions": [
+                'Permissions': [
                     "ALL"
                 ],
-                "PermissionsWithGrantOption": [
-                    "ALL"
+                'PermissionsWithGrantOption': [
+                    'ALL'
                 ],
-                "Principal": {
-                    "DataLakePrincipalIdentifier.$": "$.producer_acc_id"
+                'Principal': {
+                    'DataLakePrincipalIdentifier.$': '$.producer_acc_id'
                 },
-                "Resource": {
-                    "Table": {
-                        "DatabaseName.$": "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
-                        "Name.$": "$.tables.name",
+                'Resource': {
+                    'Table': {
+                        'DatabaseName.$': "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
+                        'Name.$': '$.tables.name',
                     },
                 },
             },
-            outputPath: "$.tables.name",
+            outputPath: '$.tables.name',
             resultPath: JsonPath.DISCARD
         });
 
         // Trigger workflow in Data Domain account via Event Bridge
-        const triggerProducer = new EventBridgePutEvents(this, "triggerCreateResourceLinks", {
+        const triggerProducer = new EventBridgePutEvents(this, 'triggerCreateResourceLinks', {
             entries: [{
                 detail: TaskInput.fromObject({
-                    'central_database_name': JsonPath.format('{}_{}', JsonPath.stringAt('$.producer_acc_id'), JsonPath.stringAt('$.database_name')),
-                    'database_name': JsonPath.stringAt('$.database_name'),
-                    'table_names': JsonPath.stringAt('$.map_result.flatten'),
+                    'central_database_name': JsonPath.format(
+                        "{}_{}",
+                        JsonPath.stringAt("$.producer_acc_id"),
+                        JsonPath.stringAt("$.database_name")
+                    ),
+                    'producer_acc_id': JsonPath.stringAt("$.producer_acc_id"),
+                    'database_name': JsonPath.stringAt("$.database_name"),
+                    'table_names': JsonPath.stringAt("$.map_result.flatten"),
                 }),
-                detailType: JsonPath.format('{}_createResourceLinks', JsonPath.stringAt('$.producer_acc_id')),
+                detailType: JsonPath.format(
+                    "{}_createResourceLinks",
+                    JsonPath.stringAt("$.producer_acc_id")
+                ),
                 eventBus: eventBus,
                 source: 'com.central.stepfunction'
             }]
@@ -233,57 +267,56 @@ export class CentralGovernance extends Construct {
                 'tables.$': '$$.Map.Item.Value',
             },
             resultSelector: {
-                "flatten.$": "$[*]"
+                'flatten.$': '$[*]'
             },
-            resultPath: "$.map_result",
+            resultPath: '$.map_result',
         });
 
-        const updateDatabaseOwnerMetadata = new CallAwsService(this, "updateDatabaseOwnerMetadata", {
-            service: "glue",
-            action: "updateDatabase",
-            iamResources: ["*"],
+        const updateDatabaseOwnerMetadata = new CallAwsService(this, 'updateDatabaseOwnerMetadata', {
+            service: 'glue',
+            action: 'updateDatabase',
+            iamResources: ['*'],
             parameters: {
-                "Name.$": "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
-                "DatabaseInput": {
-                    "Name.$": "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
-                    "Parameters": {
-                        "data_owner.$": "$.producer_acc_id",
-                        "data_owner_name.$": "$.product_owner_name",
-                        "pii_flag.$": "$.product_pii_flag"
+                'Name.$': "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
+                'DatabaseInput': {
+                    'Name.$': "States.Format('{}_{}', $.producer_acc_id, $.database_name)",
+                    'Parameters': {
+                        'data_owner.$': '$.producer_acc_id',
+                        'data_owner_name.$': "$.product_owner_name",
+                        'pii_flag.$': '$.product_pii_flag'
                     }
                 }
             },
             resultPath: JsonPath.DISCARD
-        })
+        });
 
         tablesMapTask.iterator(
             addBucketPolicy.next(
                 createTable.addCatch(grantTablePermissions, {
-                    errors: ["Glue.AlreadyExistsException"],
-                    resultPath: "$.CreateTableException"
+                    errors: ['Glue.AlreadyExistsException'],
+                    resultPath: '$.CreateTableException',
                 })
             ).next(grantTablePermissions)
-        )
+        );
 
         // State machine dependencies
-        tablesMapTask.next(triggerProducer)
+        tablesMapTask.next(triggerProducer);
 
         createDatabase.addCatch(updateDatabaseOwnerMetadata, {
-            errors: ["Glue.AlreadyExistsException"], resultPath: "$.Exception"
-        }).next(updateDatabaseOwnerMetadata).next(tablesMapTask)
+            errors: ['Glue.AlreadyExistsException'], resultPath: '$.Exception'
+        }).next(updateDatabaseOwnerMetadata).next(tablesMapTask);
 
-        grantProducerAccess.next(createDatabase)
-
+        grantProducerAccess.next(createDatabase);
         grantLfAdminAccess.next(grantProducerAccess);
 
         registerS3Location.addCatch(grantLfAdminAccess, {
             errors: [
-                "LakeFormation.AlreadyExistsException"
+                'LakeFormation.AlreadyExistsException'
             ],
-            resultPath: "$.Exception"
+            resultPath: '$.Exception'
         }).next(grantLfAdminAccess);
 
-        addKmsPolicy.next(registerS3Location)
+        addKmsPolicy.next(registerS3Location);
 
         // State machine to register data product from Data Domain
         new StateMachine(this, 'RegisterDataProduct', {

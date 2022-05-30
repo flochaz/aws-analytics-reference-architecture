@@ -1,12 +1,11 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Construct, Aws, RemovalPolicy, Duration } from '@aws-cdk/core';
+import { Aws, Construct, Duration } from '@aws-cdk/core';
 import { IRole } from '@aws-cdk/aws-iam';
-import { CallAwsService } from '@aws-cdk/aws-stepfunctions-tasks';
-import { StateMachine, JsonPath, Map, Choice, Condition, Pass, Result, Wait, WaitTime } from '@aws-cdk/aws-stepfunctions';
-import { CfnEventBusPolicy, Rule, EventBus } from '@aws-cdk/aws-events';
-import * as targets from '@aws-cdk/aws-events-targets';
+import { IEventBus } from '@aws-cdk/aws-events';
+import { CallAwsService, EventBridgePutEvents } from '@aws-cdk/aws-stepfunctions-tasks';
+import { StateMachine, JsonPath, Map, Choice, Condition, Pass, Result, Wait, WaitTime, TaskInput } from '@aws-cdk/aws-stepfunctions';
 
 
 /**
@@ -14,7 +13,7 @@ import * as targets from '@aws-cdk/aws-events-targets';
  */
 export interface DataDomainWorkflowProps {
     /**
-    * Central data mesh account Id
+    * Central Governance account Id
     */
     readonly centralAccId: string;
 
@@ -22,12 +21,44 @@ export interface DataDomainWorkflowProps {
     * Lake Formation admin role
     */
     readonly lfAdminRole: IRole;
+
+    /**
+    * Event Bus in Data Domain
+    */
+    readonly eventBus: IEventBus;
 }
 
 /**
- * DataDomainWorkflow Construct to create a workflow for Producer/Consumer account.
- * The workflow is a Step Functions state machine that is invoked from the central data mesh account via EventBridge bus.
- * It checks and accepts pending RAM shares (tables), and creates resource links in LF Catalog. 
+ * This CDK Construct creates a workflow for Producer/Consumer account.
+ * It is based on an AWS Step Functions state machine. It has the following steps:
+ * * checks for AWS RAM invitations
+ * * accepts RAM invitations if the source is Central Gov. account
+ * * creates AWS Glue Data Catalog Database and tables
+ * * creates Resource-Link(s) for created tables
+ * 
+ * This Step Functions state machine is invoked from the Central Gov. account via EventBridge Event Bus.
+ * It is initiatated in {@link DataDomain}, but can be used as a standalone construct.
+ * 
+ * Usage example:
+ * ```typescript
+ * import * as cdk from '@aws-cdk/core';
+ * import { Role } from '@aws-cdk/aws-iam';
+ * import { DataDomain } from 'aws-analytics-reference-architecture';
+ * 
+ * const exampleApp = new cdk.App();
+ * const stack = new cdk.Stack(exampleApp, 'DataProductStack');
+ * 
+ * const lfAdminRole = new Role(stack, 'myLFAdminRole', {
+ *  assumedBy: ...
+ * });
+ * 
+ * new DataDomainWorkflow(this, 'DataDomainWorkflow', {
+ *  eventBus: eventBus,
+ *  lfAdminRole: lfAdminRole,
+ *  centralAccId: '1234567891011',
+ * });
+ * ```
+ * 
  */
 export class DataDomainWorkflow extends Construct {
 
@@ -50,7 +81,7 @@ export class DataDomainWorkflow extends Construct {
             action: 'getResourceShareInvitations',
             iamResources: ['*'],
             parameters: {},
-            resultPath: "$.taskresult",
+            resultPath: '$.taskresult',
         });
 
         // Task to accept RAM share invitation
@@ -61,7 +92,7 @@ export class DataDomainWorkflow extends Construct {
             parameters: {
                 'ResourceShareInvitationArn.$': '$.ram_share.ResourceShareInvitationArn',
             },
-            resultPath: "$.Response",
+            resultPath: '$.Response',
             resultSelector: {
                 'Status.$': '$.ResourceShareInvitation.Status',
             },
@@ -73,7 +104,7 @@ export class DataDomainWorkflow extends Construct {
             iamResources: ['*'],
             parameters: {
                 'DatabaseInput': {
-                    'Name.$': "$.detail.database_name"
+                    'Name.$': '$.detail.database_name'
                 },
             },
             resultPath: JsonPath.DISCARD,
@@ -84,22 +115,22 @@ export class DataDomainWorkflow extends Construct {
             action: 'grantPermissions',
             iamResources: ['*'],
             parameters: {
-                "Permissions": [
-                    "ALL"
+                'Permissions': [
+                    'ALL'
                 ],
-                "Principal": {
-                    "DataLakePrincipalIdentifier": props.lfAdminRole.roleArn
+                'Principal': {
+                    'DataLakePrincipalIdentifier': props.lfAdminRole.roleArn
                 },
-                "Resource": {
-                    "Database": {
-                        "Name.$": "$.detail.database_name"
+                'Resource': {
+                    'Database': {
+                        'Name.$': '$.detail.database_name'
                     },
                 }
             },
             resultPath: JsonPath.DISCARD
-        })
+        });
 
-        // Task to create resource-link for a shared table from central accunt
+        // Task to create a resource-link for shared table from central gov accunt
         const createResourceLink = new CallAwsService(this, 'createResourceLink', {
             service: 'glue',
             action: 'createTable',
@@ -118,6 +149,22 @@ export class DataDomainWorkflow extends Construct {
             resultPath: JsonPath.DISCARD,
         });
 
+        // Trigger crawler workflow
+        const triggerCrawler = new EventBridgePutEvents(this, 'triggerCrawler', {
+            entries: [{
+                detail: TaskInput.fromObject({
+                    'database_name': JsonPath.stringAt("$.database_name"),
+                    'table_names': JsonPath.stringAt("$.table_names"),
+                }),
+                detailType: 'triggerCrawler',
+                eventBus: props.eventBus,
+                source: 'com.central.stepfunction',
+            }]
+        });
+
+        // Pass task to finish the workflow
+        const finishWorkflow = new Pass(this, 'finishWorkflow');
+
         const rlMapTask = new Map(this, 'forEachTable', {
             itemsPath: '$.table_names',
             parameters: {
@@ -127,12 +174,11 @@ export class DataDomainWorkflow extends Construct {
             },
             resultPath: JsonPath.DISCARD,
         });
-        rlMapTask.iterator(createResourceLink)
-
-        // Pass task to finish the workflow
-        const finishWorkflow = new Pass(this, 'finishWorkflow');
-
-        rlMapTask.next(finishWorkflow)
+        rlMapTask.iterator(createResourceLink);
+        rlMapTask.next(new Choice(this, 'thisAccountIsProducer')
+            .when(Condition.stringEquals('$.producer_acc_id', Aws.ACCOUNT_ID), triggerCrawler)
+            .otherwise(finishWorkflow)
+        );
 
         // Task to iterate over RAM shares and check if there are PENDING invites from the central account
         const ramMapTask = new Map(this, 'forEachRamInvitation', {
@@ -140,9 +186,10 @@ export class DataDomainWorkflow extends Construct {
             parameters: {
                 'ram_share.$': '$$.Map.Item.Value',
                 'central_account_id.$': '$.account',
-                'central_database_name.$': "$.detail.central_database_name",
+                'central_database_name.$': '$.detail.central_database_name',
                 'database_name.$': '$.detail.database_name',
-                'table_names.$': '$.detail.table_names'
+                'table_names.$': '$.detail.table_names',
+                'producer_acc_id.$': '$.detail.producer_acc_id'
             },
             resultPath: '$.map_result',
             outputPath: '$.map_result.[?(@.central_account_id)]',
@@ -150,10 +197,17 @@ export class DataDomainWorkflow extends Construct {
 
         ramMapTask.iterator(new Choice(this, 'isInvitationPending')
             .when(Condition.and(
-                Condition.stringEqualsJsonPath('$.ram_share.SenderAccountId', '$.central_account_id'),
+                Condition.stringEqualsJsonPath(
+                    '$.ram_share.SenderAccountId',
+                    '$.central_account_id'
+                ),
                 Condition.stringEquals('$.ram_share.Status', 'PENDING')
             ), acceptRamShare)
-            .otherwise(new Pass(this, "notPendingPass", { result: Result.fromObject({}) })));
+            .otherwise(
+                new Pass(this, 'notPendingPass', {
+                    result: Result.fromObject({})
+                }),
+            ));
 
         ramMapTask.next(new Choice(this, 'shareAccepted', { outputPath: '$[0]' })
             .when(Condition.and(Condition.isPresent('$[0]'),
@@ -161,52 +215,23 @@ export class DataDomainWorkflow extends Construct {
                 rlMapTask
             ).otherwise(finishWorkflow))
 
-        const initWait = new Wait(this, "InitWait", {
+        // Avoid possible delays in between RAM share time and EventBridge event time 
+        const initWait = new Wait(this, 'InitWait', {
             time: WaitTime.duration(Duration.seconds(5))
         })
 
         createLocalDatabase.addCatch(grantCreateTable, {
-            errors: ["Glue.AlreadyExistsException"], resultPath: "$.Exception"
+            errors: ['Glue.AlreadyExistsException'],
+            resultPath: '$.Exception',
         }).next(grantCreateTable).next(ramMapTask);
 
         // State Machine workflow to accept RAM share and create resource-link for a shared table
-        const crossAccStateMachine = new StateMachine(this, 'CrossAccStateMachine', {
-            definition: initWait.next(getRamInvitations).next(new Choice(this, "resourceShareInvitationsEmpty")
+        this.stateMachine = new StateMachine(this, 'CrossAccStateMachine', {
+            definition: initWait.next(getRamInvitations).next(new Choice(this, 'resourceShareInvitationsEmpty')
                 .when(Condition.isPresent('$.taskresult.ResourceShareInvitations[0]'), createLocalDatabase)
                 .otherwise(finishWorkflow)
             ),
             role: props.lfAdminRole,
         });
-
-        this.stateMachine = crossAccStateMachine;
-
-        // Event Bridge event bus for data domain account
-        const eventBus = new EventBus(this, 'dataDomainEventBus', {
-            eventBusName: `${Aws.ACCOUNT_ID}_dataDomainEventBus`,
-        });
-        eventBus.applyRemovalPolicy(RemovalPolicy.DESTROY);
-
-        // Cross-account policy to allow the central account to send events to data domain's bus
-        const crossAccountBusPolicy = new CfnEventBusPolicy(this, 'crossAccountBusPolicy', {
-            eventBusName: eventBus.eventBusName,
-            statementId: 'AllowCentralAccountToPutEvents',
-            action: 'events:PutEvents',
-            principal: props.centralAccId,
-        });
-        crossAccountBusPolicy.node.addDependency(eventBus);
-
-        // Event Bridge Rule to trigger the this worklfow upon event from the central account
-        const rule = new Rule(this, 'DataDomainRule', {
-            eventPattern: {
-                source: ['com.central.stepfunction'],
-                account: [props.centralAccId],
-                detailType: [`${Aws.ACCOUNT_ID}_createResourceLinks`],
-            },
-            eventBus,
-        });
-
-        rule.applyRemovalPolicy(RemovalPolicy.DESTROY);
-        rule.addTarget(new targets.SfnStateMachine(crossAccStateMachine));
-        rule.node.addDependency(eventBus)
     }
 }

@@ -1,138 +1,166 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Rule } from '@aws-cdk/aws-events';
+import { Rule, EventBus } from '@aws-cdk/aws-events';
 import { SfnStateMachine } from '@aws-cdk/aws-events-targets';
 import { IRole } from '@aws-cdk/aws-iam';
-import { Choice, Condition, JsonPath, Map, Pass, StateMachine, Wait, WaitTime } from '@aws-cdk/aws-stepfunctions';
+import { Choice, Condition, JsonPath, Map, StateMachine, Wait, WaitTime } from '@aws-cdk/aws-stepfunctions';
 import { CallAwsService } from '@aws-cdk/aws-stepfunctions-tasks';
 import { Construct, Duration } from '@aws-cdk/core';
 
 
 /**
- * Properties for the DataDomainCrawlerProps Construct
+ * Properties for the DataDomainCrawler Construct
  */
 export interface DataDomainCrawlerProps {
     /**
     * ARN of DataDomainWorkflow State Machine
     */
-    readonly dataDomainWorkflowArn: string,
+    readonly dataDomainWorkflowArn: string;
+
+    /**
+    * Event Bus in Data Domain account
+    */
+    readonly eventBus: EventBus;
 
     /**
     * LF Admin Role
     */
-    readonly lfAdminRole: IRole
+    readonly lfAdminRole: IRole;
 }
 
 /**
- * DataDomainCrawler Construct to create a Crawler workflow in data domain account
+ * This CDK Construct creates a AWS Glue Crawler workflow in Data Domain account.
+ * It uses AWS Step Functions state machine to orchestrate the workflow:
+ * * creates and destroys the crawler upon execution
+ * 
+ * It is triggered via Amazon EventBridge Rule upon successful execution of DataDomainWorkflow state machine {@link DataDomainWorkflow}.
+ * This construct is initiatied in {@link DataDomain} but can be used as a standalone construct.
+ * 
+ * Usage example:
+ * ```typescript
+ * import * as cdk from '@aws-cdk/core';
+ * import { DataDomainCrawler } from 'aws-analytics-reference-architecture';
+ * 
+ * const exampleApp = new cdk.App();
+ * const stack = new cdk.Stack(exampleApp, 'DataProductStack');
+ * 
+ * # See {@link DataDomain}
+ * 
+ * new DataDomainCrawler(this, 'DataDomainCrawler', {
+ *  eventBus: eventBus,
+ *  lfAdminRole: lfAdminRole,
+ *  dataDomainWorkflowArn: dataDomainWorkflow.stateMachine.stateMachineArn,
+ * });
+ * ```
+ * 
  */
 export class DataDomainCrawler extends Construct {
+    /**
+     * Construct a new instance of DataDomainCrawler.
+     * @param {Construct} scope the Scope of the CDK Construct
+     * @param {string} id the ID of the CDK Construct
+     * @param {DataDomainCrawlerProps} props the DataDomainCrawlerProps properties
+     * @access public
+     */
+
     constructor(scope: Construct, id: string, props: DataDomainCrawlerProps) {
         super(scope, id);
 
-        const parseEventPayload = new Pass(this, "ParseEventPayload", {
-            inputPath: "$.detail.input",
-            parameters: {
-                "payload.$": "States.StringToJson($)"
-            }
-        });
-
-        const traverseTableArray = new Map(this, "TraverseTableArray", {
-            itemsPath: "$.payload.detail.table_names",
+        const traverseTableArray = new Map(this, 'TraverseTableArray', {
+            itemsPath: '$.detail.table_names',
             maxConcurrency: 2,
             parameters: {
-                "tableName.$": "States.Format('rl-{}', $$.Map.Item.Value)",
-                "databaseName.$": "$.payload.detail.database_name"
+                'tableName.$': "States.Format('rl-{}', $$.Map.Item.Value)",
+                'databaseName.$': '$.detail.database_name'
             },
             resultPath: JsonPath.DISCARD
         });
 
-        const grantPermissions = new CallAwsService(this, "GrantPermissions", {
-            service: "lakeformation",
-            action: "grantPermissions",
-            iamResources: ["*"],
+        const grantPermissions = new CallAwsService(this, 'GrantPermissions', {
+            service: 'lakeformation',
+            action: 'grantPermissions',
+            iamResources: ['*'],
             parameters: {
-                "Permissions": [
-                    "ALL"
+                'Permissions': [
+                    'ALL'
                 ],
-                "Principal": {
-                    "DataLakePrincipalIdentifier": props.lfAdminRole.roleArn
+                'Principal': {
+                    'DataLakePrincipalIdentifier': props.lfAdminRole.roleArn
                 },
                 "Resource": {
-                    "Table": {
-                        "DatabaseName.$": "$.databaseName",
-                        "Name.$": "$.tableName"
+                    'Table': {
+                        'DatabaseName.$': '$.databaseName',
+                        'Name.$': '$.tableName'
                     }
                 }
             },
             resultPath: JsonPath.DISCARD
         });
 
-        const createCrawlerForTable = new CallAwsService(this, "CreateCrawlerForTable", {
-            service: "glue",
-            action: "createCrawler",
-            iamResources: ["*"],
+        const createCrawlerForTable = new CallAwsService(this, 'CreateCrawlerForTable', {
+            service: 'glue',
+            action: 'createCrawler',
+            iamResources: ['*'],
             parameters: {
-                "Name.$": "States.Format('{}_{}_{}', $$.Execution.Id, $.databaseName, $.tableName)",
-                "Role": props.lfAdminRole.roleArn,
-                "Targets": {
-                    "CatalogTargets": [
+                'Name.$': "States.Format('{}_{}_{}', $$.Execution.Id, $.databaseName, $.tableName)",
+                'Role': props.lfAdminRole.roleArn,
+                'Targets': {
+                    'CatalogTargets': [
                         {
-                            "DatabaseName.$": "$.databaseName",
-                            "Tables.$": "States.Array($.tableName)"
+                            'DatabaseName.$': '$.databaseName',
+                            'Tables.$': 'States.Array($.tableName)'
                         }
                     ]
                 },
-                "SchemaChangePolicy": {
-                    "DeleteBehavior": "LOG",
-                    "UpdateBehavior": "UPDATE_IN_DATABASE"
+                'SchemaChangePolicy': {
+                    'DeleteBehavior': 'LOG',
+                    'UpdateBehavior': 'UPDATE_IN_DATABASE'
                 }
             },
             resultPath: JsonPath.DISCARD
         });
 
-        const startCrawler = new CallAwsService(this, "StartCrawler", {
-            service: "glue",
-            action: "startCrawler",
-            iamResources: ["*"],
+        const startCrawler = new CallAwsService(this, 'StartCrawler', {
+            service: 'glue',
+            action: 'startCrawler',
+            iamResources: ['*'],
             parameters: {
-                "Name.$": "States.Format('{}_{}_{}', $$.Execution.Id, $.databaseName, $.tableName)"
+                'Name.$': "States.Format('{}_{}_{}', $$.Execution.Id, $.databaseName, $.tableName)"
             },
             resultPath: JsonPath.DISCARD
         });
 
-        const waitForCrawler = new Wait(this, "WaitForCrawler", {
+        const waitForCrawler = new Wait(this, 'WaitForCrawler', {
             time: WaitTime.duration(Duration.seconds(15))
         });
 
-        const getCrawler = new CallAwsService(this, "GetCrawler", {
-            service: "glue",
-            action: "getCrawler",
-            iamResources: ["*"],
+        const getCrawler = new CallAwsService(this, 'GetCrawler', {
+            service: 'glue',
+            action: 'getCrawler',
+            iamResources: ['*'],
             parameters: {
-                "Name.$": "States.Format('{}_{}_{}', $$.Execution.Id, $.databaseName, $.tableName)"
+                'Name.$': "States.Format('{}_{}_{}', $$.Execution.Id, $.databaseName, $.tableName)"
             },
-            resultPath: "$.crawlerInfo"
+            resultPath: '$.crawlerInfo'
         });
 
-        const checkCrawlerStatusChoice = new Choice(this, "CheckCrawlerStatusChoice");
+        const checkCrawlerStatusChoice = new Choice(this, 'CheckCrawlerStatusChoice');
 
-        const deleteCrawler = new CallAwsService(this, "DeleteCrawler", {
-            service: "glue",
-            action: "deleteCrawler",
-            iamResources: ["*"],
+        const deleteCrawler = new CallAwsService(this, 'DeleteCrawler', {
+            service: 'glue',
+            action: 'deleteCrawler',
+            iamResources: ['*'],
             parameters: {
-                "Name.$": "States.Format('{}_{}_{}', $$.Execution.Id, $.databaseName, $.tableName)"
+                'Name.$': "States.Format('{}_{}_{}', $$.Execution.Id, $.databaseName, $.tableName)"
             },
             resultPath: JsonPath.DISCARD
         });
-
         deleteCrawler.endStates;
+
         checkCrawlerStatusChoice
             .when(Condition.stringEquals("$.crawlerInfo.Crawler.State", "READY"), deleteCrawler)
             .otherwise(waitForCrawler);
-
 
         getCrawler.next(checkCrawlerStatusChoice);
         waitForCrawler.next(getCrawler);
@@ -141,30 +169,26 @@ export class DataDomainCrawler extends Construct {
         grantPermissions.next(createCrawlerForTable);
 
         traverseTableArray.iterator(grantPermissions).endStates;
-        parseEventPayload.next(traverseTableArray);
 
-        const initState = new Wait(this, "WaitForMetadata", {
+        const initState = new Wait(this, 'WaitForMetadata', {
             time: WaitTime.duration(Duration.seconds(15))
         })
 
-        initState.next(parseEventPayload);
+        initState.next(traverseTableArray);
 
-        const updateTableSchemasStateMachine = new StateMachine(this, "UpdateTableSchemas", {
+        const updateTableSchemasStateMachine = new StateMachine(this, 'UpdateTableSchemas', {
             definition: initState,
             role: props.lfAdminRole
         });
 
-        new Rule(this, "TriggerUpdateTableSchemasRule", {
+        new Rule(this, 'TriggerUpdateTableSchemasRule', {
+            eventBus: props.eventBus,
             targets: [
                 new SfnStateMachine(updateTableSchemasStateMachine)
             ],
             eventPattern: {
-                source: ["aws.states"],
-                detailType: ["Step Functions Execution Status Change"],
-                detail: {
-                    "status": ["SUCCEEDED"],
-                    "stateMachineArn": [props.dataDomainWorkflowArn]
-                }
+                source: ['com.central.stepfunction'],
+                detailType: ['triggerCrawler'],
             }
         });
     }
