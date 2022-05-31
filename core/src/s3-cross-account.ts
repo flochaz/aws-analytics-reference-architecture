@@ -1,9 +1,9 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { AccountPrincipal } from '@aws-cdk/aws-iam';
-import { Bucket } from '@aws-cdk/aws-s3';
-import { Construct } from '@aws-cdk/core';
+import { AccountPrincipal } from 'aws-cdk-lib/aws-iam';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { Construct } from 'constructs';
 
 /**
  * The props for S3CrossAccount construct
@@ -11,7 +11,7 @@ import { Construct } from '@aws-cdk/core';
 export interface S3CrossAccountProps {
 
   /**
-   * The S3 Bucket object to grant cross account access. 
+   * The S3 Bucket object to grant cross account access.
    * This needs to be a Bucket object and not an IBucket because the construct modifies the Bucket policy
    */
   readonly s3Bucket: Bucket;
@@ -36,14 +36,14 @@ export interface S3CrossAccountProps {
  *
  * Usage example:
  * ```typescript
- * import * as cdk from '@aws-cdk/core';
+ * import * as cdk from 'aws-cdk-lib';
  * import { S3CrossAccount } from 'aws-analytics-reference-architecture';
  *
  * const exampleApp = new cdk.App();
  * const stack = new cdk.Stack(exampleApp, 'S3CrossAccountStack');
  *
  * const myBucket = new Bucket(stack, 'MyBucket')
- * 
+ *
  * new S3CrossAccount(stack, 'S3CrossAccountGrant', {
  *   bucket: myBucket,
  *   s3ObjectKey: 'my-data',
@@ -85,6 +85,6 @@ export class S3CrossAccount extends Construct {
     // if (props.bucket.encryptionKey)  props.bucket.encryptionKey.grantEncryptDecrypt(targetAccount);
 
     const objectKey = props.s3ObjectKey ? props.s3ObjectKey + '/*' : '*';
-    props.s3Bucket.grantReadWrite(targetAccount, objectKey)
+    props.s3Bucket.grantReadWrite(targetAccount, objectKey);
   };
 }

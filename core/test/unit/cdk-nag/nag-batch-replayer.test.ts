@@ -7,9 +7,9 @@
  * @group unit/best-practice/batch-replayer
  */
 
-import { Annotations, Match } from '@aws-cdk/assertions';
-import { Bucket } from '@aws-cdk/aws-s3';
-import { App, Aspects, Stack } from '@aws-cdk/core';
+import { Annotations, Match } from 'aws-cdk-lib/assertions';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { App, Aspects, Stack } from 'aws-cdk-lib';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { AwsSolutionsChecks, NagSuppressions } from 'cdk-nag';
 import { BatchReplayer, PreparedDataset } from '../../../src';
@@ -22,7 +22,7 @@ const sinkBucket = new Bucket(batchReplayerStack, 'SinkBucket');
 const batchReplayer = new BatchReplayer(batchReplayerStack, 'TestBatchReplayer', {
   dataset: PreparedDataset.RETAIL_1_GB_WEB_SALE,
   frequency: 120,
-  sinkBucket: sinkBucket ,
+  sinkBucket: sinkBucket,
   sinkObjectKey: 'test',
 });
 

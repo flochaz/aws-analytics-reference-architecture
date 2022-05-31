@@ -8,11 +8,11 @@
  */
 
 
-import { Annotations, Match } from '@aws-cdk/assertions';
-import { Database, DataFormat, Table } from '@aws-cdk/aws-glue';
-import { Stream } from '@aws-cdk/aws-kinesis';
-import { Bucket } from '@aws-cdk/aws-s3';
-import { App, Aspects, Stack } from '@aws-cdk/core';
+import { Annotations, Match } from 'aws-cdk-lib/assertions';
+import { Database, DataFormat, Table } from '@aws-cdk/aws-glue-alpha';
+import { Stream } from 'aws-cdk-lib/aws-kinesis';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { App, Aspects, Stack } from 'aws-cdk-lib';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { AwsSolutionsChecks, NagSuppressions } from 'cdk-nag';
 import { DataLakeExporter } from '../../../src/data-lake-exporter';
@@ -37,7 +37,7 @@ const table = new Table(dataLakeExporterStack, 'testTable', {
     },
   ],
 });
-const bucket = new Bucket(dataLakeExporterStack, 'Bucket')
+const bucket = new Bucket(dataLakeExporterStack, 'Bucket');
 
 new DataLakeExporter(dataLakeExporterStack, 'testExporter', {
   sinkBucket: bucket,

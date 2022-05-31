@@ -1,9 +1,12 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Bucket, BucketEncryption, StorageClass } from '@aws-cdk/aws-s3';
-import { Construct, Duration } from '@aws-cdk/core';
+import { Bucket, BucketEncryption, StorageClass } from 'aws-cdk-lib/aws-s3';
+import { Duration } from 'aws-cdk-lib';
 import { AraBucket } from './ara-bucket';
+import { Construct } from 'constructs';
+import { ContextOptions } from './common/context-options';
+import { TrackedConstruct, TrackedConstructProps } from './common/tracked-construct';
 
 /**
  * Properties for the DataLakeStorage Construct
@@ -70,7 +73,7 @@ export interface DataLakeStorageProps {
  *
  * Usage example:
  * ```typescript
- * import * as cdk from '@aws-cdk/core';
+ * import * as cdk from 'aws-cdk-lib';
  * import { DataLakeStorage } from 'aws-analytics-reference-architecture';
  *
  * const exampleApp = new cdk.App();
@@ -87,7 +90,7 @@ export interface DataLakeStorageProps {
  * ```
  */
 
-export class DataLakeStorage extends Construct {
+export class DataLakeStorage extends TrackedConstruct {
 
   public readonly rawBucket: Bucket;
   public readonly cleanBucket: Bucket;
@@ -102,7 +105,12 @@ export class DataLakeStorage extends Construct {
    */
 
   constructor(scope: Construct, id: string, props?: DataLakeStorageProps) {
-    super(scope, id);
+
+    const trackedConstructProps : TrackedConstructProps = {
+      trackingCode: ContextOptions.DATA_LAKE_ID,
+    };
+
+    super(scope, id, trackedConstructProps);
 
     var rawInfrequentAccessDelay = 30;
     var rawArchiveDelay = 90;

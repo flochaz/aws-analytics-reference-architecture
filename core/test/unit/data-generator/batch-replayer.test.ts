@@ -7,18 +7,17 @@
  * @group unit/data-generator/batch-replayer
  */
 
-import { Stack } from "@aws-cdk/core";
+import { Stack } from "aws-cdk-lib";
 
 import { BatchReplayer } from "../../../src/data-generator/batch-replayer";
 import { PreparedDataset } from "../../../src/datasets";
-import "@aws-cdk/assert/jest";
-import { Template } from "@aws-cdk/assertions";
-import { Bucket } from "@aws-cdk/aws-s3";
+import { Bucket } from "aws-cdk-lib/aws-s3";
+import { Template } from "aws-cdk-lib/assertions";
 
 let testStack: Stack;
+let bucket: Bucket;
 let batchReplayer: BatchReplayer;
 let template: Template;
-let bucket: Bucket;
 
 beforeEach(() => {
   testStack = new Stack();
@@ -27,8 +26,7 @@ beforeEach(() => {
     dataset: PreparedDataset.RETAIL_1_GB_WEB_SALE,
     frequency: 120,
     sinkBucket: bucket,
-    sinkObjectKey: 'test'
-  });
+    sinkObjectKey: 'test'  });
   template = Template.fromStack(testStack);
 });
 

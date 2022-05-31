@@ -1,10 +1,10 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Role, ServicePrincipal } from '@aws-cdk/aws-iam';
-import * as lakeformation from '@aws-cdk/aws-lakeformation';
-import { Bucket } from '@aws-cdk/aws-s3';
-import { Construct } from '@aws-cdk/core';
+import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import * as lakeformation from 'aws-cdk-lib/aws-lakeformation';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { Construct } from 'constructs';
 
 /**
 * The props for LF-S3-Location Construct.
@@ -22,7 +22,7 @@ export interface LakeFormationS3LocationProps {
 }
 
 /**
- * This CDK construct aims to register an S3 Location for Lakeformation with Read and Write access. 
+ * This CDK construct aims to register an S3 Location for Lakeformation with Read and Write access.
  * If the location is in a different account, cross account access should be granted via the [S3CrossAccount]{@link S3CrossAccount} construct.
  *
  * This construct instantiate 2 objects:
@@ -39,14 +39,14 @@ export interface LakeFormationS3LocationProps {
  *
  * Usage example:
  * ```typescript
- * import * as cdk from '@aws-cdk/core';
+ * import * as cdk from 'aws-cdk-lib';
  * import { LakeformationS3Location } from 'aws-analytics-reference-architecture';
  *
  * const exampleApp = new cdk.App();
  * const stack = new cdk.Stack(exampleApp, 'LakeformationS3LocationStack');
- * 
+ *
  * const myBucket = new Bucket(stack, 'MyBucket')
- * 
+ *
  * new LakeformationS3Location(stack, 'MyLakeformationS3Location', {
  *   bucketName: myBucket,
  *   objectKey: 'my-prefix',
@@ -99,7 +99,7 @@ export class LakeformationS3Location extends Construct {
     //   );
     // }
 
-    props.s3Bucket.grantReadWrite(this.dataAccessRole, objectKey)
+    props.s3Bucket.grantReadWrite(this.dataAccessRole, objectKey);
 
     new lakeformation.CfnResource(this, 'MyCfnResource', {
       resourceArn: props.s3Bucket.arnForObjects(objectKey),

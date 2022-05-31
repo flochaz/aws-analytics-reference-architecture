@@ -7,9 +7,8 @@
 * @group integ/athena-demo-setup
 */
 
-import * as cdk from '@aws-cdk/core';
-import { SdkProvider } from 'aws-cdk/lib/api/aws-auth';
-import { CloudFormationDeployments } from 'aws-cdk/lib/api/cloudformation-deployments';
+import * as cdk from 'aws-cdk-lib';
+import { deployStack, destroyStack } from './utils';
 
 import { AthenaDemoSetup } from '../../src/athena-demo-setup';
 
@@ -32,35 +31,16 @@ new cdk.CfnOutput(stack, 'AthenaWorkgroupName', {
 
 describe('deploy succeed', () => {
   it('can be deploy succcessfully', async () => {
-    // GIVEN
-    const stackArtifact = integTestApp.synth().getStackByName(stack.stackName);
-    
-    const sdkProvider = await SdkProvider.withAwsCliCompatibleDefaults({
-      profile: process.env.AWS_PROFILE,
-    });
-    const cloudFormation = new CloudFormationDeployments({ sdkProvider });
-    
-    // WHEN
-    const deployResult = await cloudFormation.deployStack({
-      stack: stackArtifact,
-    });
+    const deployResult = await deployStack(integTestApp, stack);
+
     
     // THEN
-    expect(deployResult.outputs.AthenaWorkgroupName).toEqual(`demo`);
-    expect(deployResult.outputs.ResultsBucketName).toContain(`athena-logs`);    
+    expect(deployResult.outputs.AthenaWorkgroupName).toEqual('demo');
+    expect(deployResult.outputs.ResultsBucketName).toContain('athena-logs');
 
   }, 9000000);
 });
 
 afterAll(async () => {
-  const stackArtifact = integTestApp.synth().getStackByName(stack.stackName);
-  
-  const sdkProvider = await SdkProvider.withAwsCliCompatibleDefaults({
-    profile: process.env.AWS_PROFILE,
-  });
-  const cloudFormation = new CloudFormationDeployments({ sdkProvider });
-  
-  await cloudFormation.destroyStack({
-    stack: stackArtifact,
-  });
+  await destroyStack(integTestApp, stack);
 });

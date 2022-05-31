@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT-0
 
 import { join } from 'path';
-import { FlowLogDestination, IVpc, SubnetType, Vpc, VpcAttributes } from '@aws-cdk/aws-ec2';
+import { FlowLogDestination, IVpc, SubnetType, Vpc, VpcAttributes } from 'aws-cdk-lib/aws-ec2';
 import {
   CapacityType,
   Cluster,
@@ -10,8 +10,8 @@ import {
   KubernetesManifest,
   KubernetesVersion,
   Nodegroup,
-} from '@aws-cdk/aws-eks';
-import { CfnVirtualCluster } from '@aws-cdk/aws-emrcontainers';
+} from 'aws-cdk-lib/aws-eks';
+import { CfnVirtualCluster } from 'aws-cdk-lib/aws-emrcontainers';
 import {
   CfnServiceLinkedRole,
   Effect,
@@ -23,11 +23,11 @@ import {
   PolicyStatement,
   Role,
   ServicePrincipal,
-} from '@aws-cdk/aws-iam';
-import { LogGroup, RetentionDays } from '@aws-cdk/aws-logs';
-import { Bucket, BucketEncryption, Location } from '@aws-cdk/aws-s3';
-import { BucketDeployment, Source } from '@aws-cdk/aws-s3-deployment';
-import { Aws, CfnOutput, Construct, CustomResource, Duration, Fn, Stack, Tags, RemovalPolicy } from '@aws-cdk/core';
+} from 'aws-cdk-lib/aws-iam';
+import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
+import { Bucket, BucketEncryption, Location } from 'aws-cdk-lib/aws-s3';
+import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
+import { Aws, CfnOutput, CustomResource, Duration, Fn, Stack, Tags, RemovalPolicy } from 'aws-cdk-lib';
 import { AraBucket } from '../ara-bucket';
 import { SingletonKey } from '../singleton-kms-key';
 import { SingletonCfnLaunchTemplate } from '../singleton-launch-template';
@@ -43,7 +43,10 @@ import * as SharedDefaultConfig from './resources/k8s/emr-eks-config/shared.json
 import * as IamPolicyAlb from './resources/k8s/iam-policy-alb.json';
 import * as K8sRoleBinding from './resources/k8s/rbac/emr-containers-role-binding.json';
 import * as K8sRole from './resources/k8s/rbac/emr-containers-role.json';
+import { ContextOptions } from '../common/context-options';
+import { TrackedConstruct, TrackedConstructProps } from '../common/tracked-construct';
 
+import { Construct } from 'constructs';
 
 /**
  * The properties for the EmrEksCluster Construct class.
@@ -91,18 +94,18 @@ export interface EmrEksClusterProps {
 }
 
 /**
- * EmrEksCluster Construct packaging all the resources and configuration required to run Amazon EMR on EKS. 
+ * EmrEksCluster Construct packaging all the resources and configuration required to run Amazon EMR on EKS.
  * It deploys:
- * * An EKS cluster (VPC configuration can be customized) 
+ * * An EKS cluster (VPC configuration can be customized)
  * * A tooling nodegroup to run tools including the Kubedashboard and the Cluster Autoscaler
  * * Optionally multiple nodegroups (one per AZ) for critical/shared/notebook EMR workloads
  * * Additional nodegroups can be configured
- * 
- * The construct will upload on S3 the Pod templates required to run EMR jobs on the default nodegroups. 
+ *
+ * The construct will upload on S3 the Pod templates required to run EMR jobs on the default nodegroups.
  * It will also parse and store the configuration of EMR on EKS jobs for each default nodegroup in object parameters
- * 
+ *
  * Methods are available to add EMR Virtual Clusters to the EKS cluster and to create execution roles for the virtual clusters.
- * 
+ *
  * Usage example:
  *
  * ```typescript
@@ -116,11 +119,11 @@ export interface EmrEksClusterProps {
  *   createNamespace: <TRUE OR FALSE>,
  *   eksNamespace: <K8S_namespace>,
  * });
- * 
+ *
  * const role = emrEks.createExecutionRole(stack, 'ExecRole',{
  *   policy: <POLICY>,
  * })
- * 
+ *
  * // EMR on EKS virtual cluster ID
  * cdk.CfnOutput(self, 'VirtualClusterId',value = virtualCluster.attr_id)
  * // Job config for each nodegroup
@@ -131,7 +134,7 @@ export interface EmrEksClusterProps {
  * ```
  *
  */
-export class EmrEksCluster extends Construct {
+export class EmrEksCluster extends TrackedConstruct {
 
   /**
    * Get an existing EmrEksCluster based on the cluster name property or create a new one
@@ -152,8 +155,8 @@ export class EmrEksCluster extends Construct {
 
     return stack.node.tryFindChild(id) as EmrEksCluster || emrEksCluster!;
   }
-  private static readonly EMR_VERSIONS = ['emr-6.5.0-latest', 'emr-6.4.0-latest', 'emr-6.3.0-latest', 'emr-6.2.0-latest', 'emr-5.33.0-latest', 'emr-5.32.0-latest'];
-  private static readonly DEFAULT_EMR_VERSION = 'emr-6.4.0-latest';
+  private static readonly EMR_VERSIONS = ['emr-6.6.0-latest', 'emr-6.5.0-latest', 'emr-6.4.0-latest', 'emr-6.3.0-latest', 'emr-6.2.0-latest', 'emr-5.33.0-latest', 'emr-5.32.0-latest'];
+  private static readonly DEFAULT_EMR_VERSION = 'emr-6.6.0-latest';
   private static readonly DEFAULT_EKS_VERSION = KubernetesVersion.V1_21;
   private static readonly DEFAULT_CLUSTER_NAME = 'data-platform';
   public readonly eksCluster: Cluster;
@@ -181,7 +184,12 @@ export class EmrEksCluster extends Construct {
    * @access private
    */
   private constructor(scope: Construct, id: string, props: EmrEksClusterProps) {
-    super(scope, id);
+
+    const trackedConstructProps : TrackedConstructProps = {
+      trackingCode: ContextOptions.EMR_EKS_TRACKING_ID,
+    };
+
+    super(scope, id, trackedConstructProps);
 
     this.clusterName = props.eksClusterName ?? EmrEksCluster.DEFAULT_CLUSTER_NAME;
     //Define EKS cluster logging
@@ -376,7 +384,6 @@ export class EmrEksCluster extends Construct {
     // Create a role to be used as instance profile for nodegroups
     this.ec2InstanceNodeGroupRole = new Role(this, 'ec2InstanceNodeGroupRole', {
       assumedBy: new ServicePrincipal('ec2.amazonaws.com'),
-      roleName: 'ara-ec2-instance-role',
     });
 
     //attach policies to the role to be used by the nodegroups
@@ -401,6 +408,7 @@ export class EmrEksCluster extends Construct {
       // Add a nodegroup for notebooks
       this.addEmrEksNodegroup('notebookDriver', EmrEksNodegroup.NOTEBOOK_DRIVER);
       this.addEmrEksNodegroup('notebookExecutor', EmrEksNodegroup.NOTEBOOK_EXECUTOR);
+      this.addEmrEksNodegroup('notebookWithoutPodTemplate', EmrEksNodegroup.NOTEBOOK_WITHOUT_PODTEMPLATE);
     }
     // Create an Amazon S3 Bucket for default podTemplate assets
     this.assetBucket = AraBucket.getOrCreate(this, { bucketName: `${this.clusterName.toLowerCase()}-emr-eks-assets`, encryption: BucketEncryption.KMS_MANAGED });
@@ -445,7 +453,7 @@ export class EmrEksCluster extends Construct {
     // Replace the pod template location for driver and executor with the correct Amazon S3 path in the notebook default config
     // NotebookDefaultConfig.applicationConfiguration[0].properties['spark.kubernetes.driver.podTemplateFile'] = this.assetBucket.s3UrlForObject(`${this.podTemplateLocation.objectKey}/notebook-driver.yaml`);
     // NotebookDefaultConfig.applicationConfiguration[0].properties['spark.kubernetes.executor.podTemplateFile'] = this.assetBucket.s3UrlForObject(`${this.podTemplateLocation.objectKey}/notebook-executor.yaml`);
-    this.notebookDefaultConfig = JSON.stringify(NotebookDefaultConfig);
+    this.notebookDefaultConfig = JSON.parse(JSON.stringify(NotebookDefaultConfig));
 
     // Replace the pod template location for driver and executor with the correct Amazon S3 path in the critical default config
     CriticalDefaultConfig.applicationConfiguration[0].properties['spark.kubernetes.driver.podTemplateFile'] = this.assetBucket.s3UrlForObject(`${this.podTemplateLocation.objectKey}/critical-driver.yaml`);

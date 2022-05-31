@@ -1,13 +1,14 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { ISecurityGroup, Peer, Port, SecurityGroup, SubnetType } from '@aws-cdk/aws-ec2';
-import { CfnStudio, CfnStudioProps, CfnStudioSessionMapping } from '@aws-cdk/aws-emr';
-import { CfnVirtualCluster } from '@aws-cdk/aws-emrcontainers';
-import { Effect, IManagedPolicy, IRole, ManagedPolicy, PolicyStatement, Role, ServicePrincipal } from '@aws-cdk/aws-iam';
-import { Key } from '@aws-cdk/aws-kms';
-import { Bucket } from '@aws-cdk/aws-s3';
-import { Aws, CfnOutput, Construct, RemovalPolicy, Tags } from '@aws-cdk/core';
+import { ISecurityGroup, Peer, Port, SecurityGroup, SubnetType } from 'aws-cdk-lib/aws-ec2';
+import { CfnStudio, CfnStudioProps, CfnStudioSessionMapping } from 'aws-cdk-lib/aws-emr';
+import { CfnVirtualCluster } from 'aws-cdk-lib/aws-emrcontainers';
+import { Effect, IManagedPolicy, IRole, ManagedPolicy, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { Key } from 'aws-cdk-lib/aws-kms';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { Aws, CfnOutput, RemovalPolicy, Tags } from 'aws-cdk-lib';
+import { Construct } from 'constructs';
 import { AraBucket } from '../ara-bucket';
 import { EmrEksCluster } from '../emr-eks-platform';
 import { SingletonKey } from '../singleton-kms-key';
@@ -21,6 +22,8 @@ import {
   createUserSessionPolicy,
 } from './notebook-platform-helpers';
 import { NotebookUserOptions } from './notebook-user';
+import { ContextOptions } from '../common/context-options';
+import { TrackedConstruct, TrackedConstructProps } from '../common/tracked-construct';
 
 
 /**
@@ -162,7 +165,8 @@ export enum IdpRelayState {
  *
  * ```
  */
-export class NotebookPlatform extends Construct {
+export class NotebookPlatform extends TrackedConstruct {
+  private static readonly DEFAULT_EMR_VERSION = 'emr-6.6.0-latest';
   private static readonly STUDIO_PRINCIPAL: string = 'elasticmapreduce.amazonaws.com';
   private readonly studioId: string;
   private readonly workSpaceSecurityGroup: SecurityGroup;
@@ -192,7 +196,12 @@ export class NotebookPlatform extends Construct {
    */
 
   constructor(scope: Construct, id: string, props: NotebookPlatformProps) {
-    super(scope, id);
+
+    const trackedConstructProps : TrackedConstructProps = {
+      trackingCode: ContextOptions.DATA_ENG_PLATFORM_ID,
+    };
+
+    super(scope, id, trackedConstructProps);
 
     this.studioServicePolicy = [];
     this.studioUserPolicy = [];
@@ -384,7 +393,7 @@ export class NotebookPlatform extends Construct {
                 `${user.identityName}${index}`,
                 notebookManagedEndpoint.executionPolicy,
               ),
-              emrOnEksVersion: emrOnEksVersion ? emrOnEksVersion : undefined,
+              emrOnEksVersion: emrOnEksVersion ? emrOnEksVersion : NotebookPlatform.DEFAULT_EMR_VERSION,
               configurationOverrides: configOverride ? configOverride : undefined,
             },
 
