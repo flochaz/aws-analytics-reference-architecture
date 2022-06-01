@@ -1,12 +1,23 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Aws, Construct, Duration } from '@aws-cdk/core';
-import { IRole } from '@aws-cdk/aws-iam';
-import { IEventBus } from '@aws-cdk/aws-events';
-import { CallAwsService, EventBridgePutEvents } from '@aws-cdk/aws-stepfunctions-tasks';
-import { StateMachine, JsonPath, Map, Choice, Condition, Pass, Result, Wait, WaitTime, TaskInput } from '@aws-cdk/aws-stepfunctions';
-
+import { Aws, Duration } from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import { IRole } from 'aws-cdk-lib/aws-iam';
+import { IEventBus } from 'aws-cdk-lib/aws-events';
+import { CallAwsService, EventBridgePutEvents } from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import {
+    StateMachine,
+    JsonPath,
+    Map,
+    Choice,
+    Condition,
+    Pass,
+    Result,
+    Wait,
+    WaitTime,
+    TaskInput,
+} from 'aws-cdk-lib/aws-stepfunctions';
 
 /**
  * Properties for the DataDomainWorkflow Construct

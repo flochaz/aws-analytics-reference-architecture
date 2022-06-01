@@ -1,14 +1,14 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Construct, Aws, RemovalPolicy } from '@aws-cdk/core';
-import { IRole, Policy, PolicyStatement } from '@aws-cdk/aws-iam';
+import { Construct } from 'constructs';
+import { Aws, RemovalPolicy } from 'aws-cdk-lib';
+import { IRole, Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { DataLakeStorage } from '../data-lake-storage';
 import { DataDomainWorkflow } from './data-domain-workflow';
 import { DataDomainCrawler } from './data-domain-crawler';
-import { CfnEventBusPolicy, Rule, EventBus } from '@aws-cdk/aws-events';
-import * as targets from '@aws-cdk/aws-events-targets';
-
+import { CfnEventBusPolicy, Rule, EventBus } from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 
 /**
  * Properties for the DataDomain Construct

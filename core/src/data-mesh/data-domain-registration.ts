@@ -1,10 +1,10 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Construct, Aws, RemovalPolicy } from '@aws-cdk/core';
-import { CfnEventBusPolicy, Rule, EventBus } from '@aws-cdk/aws-events';
-import * as targets from '@aws-cdk/aws-events-targets';
-
+import { Aws, RemovalPolicy } from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import { CfnEventBusPolicy, Rule, EventBus } from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 
 /**
  * Properties for the DataDomainRegistration Construct

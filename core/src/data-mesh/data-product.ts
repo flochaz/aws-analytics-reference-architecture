@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Construct } from '@aws-cdk/core';
+import { Construct } from 'constructs';
 import { S3CrossAccount, S3CrossAccountProps } from '../s3-cross-account';
 
 /**

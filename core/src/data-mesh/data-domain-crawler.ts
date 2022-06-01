@@ -1,13 +1,13 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Rule, EventBus } from '@aws-cdk/aws-events';
-import { SfnStateMachine } from '@aws-cdk/aws-events-targets';
-import { IRole } from '@aws-cdk/aws-iam';
-import { Choice, Condition, JsonPath, Map, StateMachine, Wait, WaitTime } from '@aws-cdk/aws-stepfunctions';
-import { CallAwsService } from '@aws-cdk/aws-stepfunctions-tasks';
-import { Construct, Duration } from '@aws-cdk/core';
-
+import { Duration } from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import { Rule, EventBus } from 'aws-cdk-lib/aws-events';
+import { SfnStateMachine } from 'aws-cdk-lib/aws-events-targets';
+import { IRole } from 'aws-cdk-lib/aws-iam';
+import { Choice, Condition, JsonPath, Map, StateMachine, Wait, WaitTime } from 'aws-cdk-lib/aws-stepfunctions';
+import { CallAwsService } from 'aws-cdk-lib/aws-stepfunctions-tasks';
 
 /**
  * Properties for the DataDomainCrawler Construct

@@ -1,14 +1,14 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Construct, Aws, RemovalPolicy } from '@aws-cdk/core';
-import { IRole, Policy, PolicyStatement, PolicyDocument, Effect } from '@aws-cdk/aws-iam';
-import { CallAwsService, EventBridgePutEvents } from "@aws-cdk/aws-stepfunctions-tasks";
-import { StateMachine, JsonPath, TaskInput, Map } from "@aws-cdk/aws-stepfunctions";
-import { EventBus } from '@aws-cdk/aws-events';
+import { Aws, RemovalPolicy } from 'aws-cdk-lib';;
+import { Construct } from 'constructs';
+import { IRole, Policy, PolicyStatement, PolicyDocument, Effect } from 'aws-cdk-lib/aws-iam';
+import { CallAwsService, EventBridgePutEvents } from "aws-cdk-lib/aws-stepfunctions-tasks";
+import { StateMachine, JsonPath, TaskInput, Map } from "aws-cdk-lib/aws-stepfunctions";
+import { EventBus } from 'aws-cdk-lib/aws-events';
 
 import { Utils } from '../utils';
-
 
 /**
  * Properties for the CentralGovernance Construct
