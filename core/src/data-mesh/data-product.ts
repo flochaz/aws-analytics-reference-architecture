@@ -23,11 +23,11 @@ export interface DataProductProps {
  * 
  * Usage example:
  * ```typescript
- * import * as cdk from '@aws-cdk/core';
+ * import { App, Stack } from 'aws-cdk-lib';
  * import { DataProduct, DataLakeStorage } from 'aws-analytics-reference-architecture';
  * 
- * const exampleApp = new cdk.App();
- * const stack = new cdk.Stack(exampleApp, 'DataProductStack');
+ * const exampleApp = new App();
+ * const stack = new Stack(exampleApp, 'DataProductStack');
  * 
  * const myBucket = new DataLakeStorage(stack, 'MyDataLakeStorage');
  * 

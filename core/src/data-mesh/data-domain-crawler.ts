@@ -1,13 +1,14 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Duration } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { Rule, EventBus } from 'aws-cdk-lib/aws-events';
 import { SfnStateMachine } from 'aws-cdk-lib/aws-events-targets';
 import { IRole } from 'aws-cdk-lib/aws-iam';
-import { Choice, Condition, JsonPath, Map, StateMachine, Wait, WaitTime } from 'aws-cdk-lib/aws-stepfunctions';
+import { Choice, Condition, JsonPath, Map, StateMachine, Wait, WaitTime, LogLevel } from 'aws-cdk-lib/aws-stepfunctions';
 import { CallAwsService } from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import { LogGroup } from 'aws-cdk-lib/aws-logs';
 
 /**
  * Properties for the DataDomainCrawler Construct
@@ -39,11 +40,11 @@ export interface DataDomainCrawlerProps {
  * 
  * Usage example:
  * ```typescript
- * import * as cdk from '@aws-cdk/core';
+ * import { App, Stack } from 'aws-cdk-lib';
  * import { DataDomainCrawler } from 'aws-analytics-reference-architecture';
  * 
- * const exampleApp = new cdk.App();
- * const stack = new cdk.Stack(exampleApp, 'DataProductStack');
+ * const exampleApp = cdk.App();
+ * const stack = new Stack(exampleApp, 'DataProductStack');
  * 
  * # See {@link DataDomain}
  * 
@@ -176,9 +177,17 @@ export class DataDomainCrawler extends Construct {
 
         initState.next(traverseTableArray);
 
+        // Create Log group for this state machine
+        const logGroup = new LogGroup(this, 'centralGov-stateMachine');
+        logGroup.applyRemovalPolicy(RemovalPolicy.DESTROY);
+
         const updateTableSchemasStateMachine = new StateMachine(this, 'UpdateTableSchemas', {
             definition: initState,
-            role: props.lfAdminRole
+            role: props.lfAdminRole,
+            logs: {
+                destination: logGroup,
+                level: LogLevel.ALL,
+            },
         });
 
         new Rule(this, 'TriggerUpdateTableSchemasRule', {

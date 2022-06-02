@@ -43,12 +43,12 @@ export interface DataDomainPros {
  * 
  * Usage example:
  * ```typescript
- * import * as cdk from '@aws-cdk/core';
- * import { Role } from '@aws-cdk/aws-iam';
+ * import { App, Stack } from 'aws-cdk-lib';
+ * import { Role } from 'aws-cdk-lib/aws-iam';
  * import { DataDomain } from 'aws-analytics-reference-architecture';
  * 
- * const exampleApp = new cdk.App();
- * const stack = new cdk.Stack(exampleApp, 'DataProductStack');
+ * const exampleApp = new App();
+ * const stack = new Stack(exampleApp, 'DataProductStack');
  * 
  * const lfAdminRole = new Role(stack, 'myLFAdminRole', {
  *  assumedBy: ...

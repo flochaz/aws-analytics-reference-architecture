@@ -1,11 +1,12 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import { Aws, Duration } from 'aws-cdk-lib';
+import { Aws, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { IRole } from 'aws-cdk-lib/aws-iam';
 import { IEventBus } from 'aws-cdk-lib/aws-events';
 import { CallAwsService, EventBridgePutEvents } from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import { LogGroup } from 'aws-cdk-lib/aws-logs';
 import {
     StateMachine,
     JsonPath,
@@ -17,6 +18,7 @@ import {
     Wait,
     WaitTime,
     TaskInput,
+    LogLevel,
 } from 'aws-cdk-lib/aws-stepfunctions';
 
 /**
@@ -52,12 +54,12 @@ export interface DataDomainWorkflowProps {
  * 
  * Usage example:
  * ```typescript
- * import * as cdk from '@aws-cdk/core';
- * import { Role } from '@aws-cdk/aws-iam';
+ * import { App, Stack } from 'aws-cdk-lib';
+ * import { Role } from 'aws-cdk-lib/aws-iam';
  * import { DataDomain } from 'aws-analytics-reference-architecture';
  * 
- * const exampleApp = new cdk.App();
- * const stack = new cdk.Stack(exampleApp, 'DataProductStack');
+ * const exampleApp = new App();
+ * const stack = new Stack(exampleApp, 'DataProductStack');
  * 
  * const lfAdminRole = new Role(stack, 'myLFAdminRole', {
  *  assumedBy: ...
@@ -236,6 +238,10 @@ export class DataDomainWorkflow extends Construct {
             resultPath: '$.Exception',
         }).next(grantCreateTable).next(ramMapTask);
 
+        // Create Log group for this state machine
+        const logGroup = new LogGroup(this, 'centralGov-stateMachine');
+        logGroup.applyRemovalPolicy(RemovalPolicy.DESTROY);
+
         // State Machine workflow to accept RAM share and create resource-link for a shared table
         this.stateMachine = new StateMachine(this, 'CrossAccStateMachine', {
             definition: initWait.next(getRamInvitations).next(new Choice(this, 'resourceShareInvitationsEmpty')
@@ -243,6 +249,10 @@ export class DataDomainWorkflow extends Construct {
                 .otherwise(finishWorkflow)
             ),
             role: props.lfAdminRole,
+            logs: {
+                destination: logGroup,
+                level: LogLevel.ALL,
+            },
         });
     }
 }

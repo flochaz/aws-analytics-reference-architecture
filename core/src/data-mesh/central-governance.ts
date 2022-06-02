@@ -5,8 +5,9 @@ import { Aws, RemovalPolicy } from 'aws-cdk-lib';;
 import { Construct } from 'constructs';
 import { IRole, Policy, PolicyStatement, PolicyDocument, Effect } from 'aws-cdk-lib/aws-iam';
 import { CallAwsService, EventBridgePutEvents } from "aws-cdk-lib/aws-stepfunctions-tasks";
-import { StateMachine, JsonPath, TaskInput, Map } from "aws-cdk-lib/aws-stepfunctions";
+import { StateMachine, JsonPath, TaskInput, Map, LogLevel } from "aws-cdk-lib/aws-stepfunctions";
 import { EventBus } from 'aws-cdk-lib/aws-events';
+import { LogGroup } from 'aws-cdk-lib/aws-logs';
 
 import { Utils } from '../utils';
 
@@ -32,12 +33,12 @@ export interface CentralGovernanceProps {
  * 
  * Usage example:
  * ```typescript
- * import * as cdk from '@aws-cdk/core';
- * import { Role } from '@aws-cdk/aws-iam';
+ * import { App, Stack } from 'aws-cdk-lib';
+ * import { Role } from 'aws-cdk-lib/aws-iam';
  * import { CentralGovernance } from 'aws-analytics-reference-architecture';
  * 
- * const exampleApp = new cdk.App();
- * const stack = new cdk.Stack(exampleApp, 'DataProductStack');
+ * const exampleApp = new App();
+ * const stack = new Stack(exampleApp, 'DataProductStack');
  * 
  * const lfAdminRole = new Role(stack, 'myLFAdminRole', {
  *  assumedBy: ...
@@ -318,10 +319,18 @@ export class CentralGovernance extends Construct {
 
         addKmsPolicy.next(registerS3Location);
 
+        // Create Log group for this state machine
+        const logGroup = new LogGroup(this, 'centralGov-stateMachine');
+        logGroup.applyRemovalPolicy(RemovalPolicy.DESTROY);
+
         // State machine to register data product from Data Domain
         new StateMachine(this, 'RegisterDataProduct', {
             definition: addKmsPolicy,
             role: props.lfAdminRole,
+            logs: {
+                destination: logGroup,
+                level: LogLevel.ALL,
+            },
         });
     }
 }
